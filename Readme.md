@@ -5,3 +5,6 @@ https://medium.com/@AlexanderObregon/email-verification-flows-with-spring-boot-a
 https://www.baeldung.com/mapstruct
 https://www.baeldung.com/spring-aspect-oriented-programming-logging
 https://medium.com/@roshanfarakate/global-exception-handling-in-spring-boot-712593159a26
+https://medium.com/@barbieri.santiago/java-constants-best-practices-648fc562bb08
+
+https://www.baeldung.com/spring-rest-openapi-documentation
