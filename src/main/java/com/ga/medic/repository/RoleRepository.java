@@ -4,6 +4,9 @@ import com.ga.medic.enums.RoleEnum;
 import com.ga.medic.model.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface RoleRepository extends JpaRepository<Role, Long> {
-    Role getByName(RoleEnum name);
+
+    Optional<Role> findByName(RoleEnum roleEnum);
 }
