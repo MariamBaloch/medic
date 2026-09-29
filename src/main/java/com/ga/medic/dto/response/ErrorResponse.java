@@ -1,4 +1,4 @@
-package com.ga.medic.dto;
+package com.ga.medic.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

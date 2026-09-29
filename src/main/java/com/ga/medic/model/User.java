@@ -1,11 +1,13 @@
 package com.ga.medic.model;
 
+import com.ga.medic.enums.GenderEnum;
 import com.ga.medic.enums.UserStatusEnum;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -18,7 +20,7 @@ public class User extends Auditable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(cascade = CascadeType.REMOVE)
+    @ManyToOne
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
@@ -30,6 +32,22 @@ public class User extends Auditable {
 
     @Column
     private String imageUrl;
+
+    @Column(nullable = false, length = 100)
+    private String firstName;
+
+    @Column(nullable = false, length = 100)
+    private String lastName;
+
+    @Column(nullable = false)
+    private LocalDate dateOfBirth;
+
+    @Column(nullable = false, length = 20)
+    private String phone;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private GenderEnum gender;
 
     @Column
     private String verificationToken;
@@ -43,4 +61,25 @@ public class User extends Auditable {
 
     @Column
     private Instant deletedAt;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private PatientProfile patientProfile;
+
+    public void setPatientProfile(PatientProfile patientProfile) {
+        this.patientProfile = patientProfile;
+        if (patientProfile != null) {
+            patientProfile.setUser(this);
+        }
+    }
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private DoctorProfile doctorProfile;
+
+    public void setDoctorProfile(DoctorProfile doctorProfile) {
+        this.doctorProfile = doctorProfile;
+        if (doctorProfile != null) {
+            doctorProfile.setUser(this);
+        }
+    }
+
 }
