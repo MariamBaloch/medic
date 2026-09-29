@@ -24,6 +24,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        log.warn("Validation failed on {}", request.getRequestURI());
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
@@ -49,18 +50,23 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InformationNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleInformationNotFound(InformationNotFoundException ex, HttpServletRequest request) {
+        log.warn("Not found on {}: {}", request.getRequestURI(), ex.getMessage());
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<ErrorResponse> handleDisabledAccount(DisabledException ex, HttpServletRequest request) {
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleDisabledAccount(IllegalArgumentException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex, HttpServletRequest request) {
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        log.warn("Authorization denied for {}", request.getRequestURI());
         return build(HttpStatus.FORBIDDEN, "You do not have permission to perform this action", request, null);
     }
 
