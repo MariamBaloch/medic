@@ -32,4 +32,12 @@ public record MyUserDetails(User user) implements UserDetails {
     public boolean isEnabled() {
         return user.getStatus().equals(UserStatusEnum.ACTIVE);
     }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        if (user.getDoctorProfile() != null) {
+            return Boolean.TRUE.equals(user.getDoctorProfile().getIsVerified());
+        }
+        return true;
+    }
 }
