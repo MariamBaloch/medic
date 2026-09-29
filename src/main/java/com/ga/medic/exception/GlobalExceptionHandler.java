@@ -1,16 +1,19 @@
 package com.ga.medic.exception;
 
-import com.ga.medic.dto.ErrorResponse;
+import com.ga.medic.dto.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,12 +33,35 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        Throwable root = ex.getMostSpecificCause();
+        if (root instanceof DateTimeException) {
+            Map<String, String> fieldErrors = new LinkedHashMap<>();
+            fieldErrors.put("dateOfBirth", "Must be a valid date in the format dd/MM/yyyy");
+            return build(HttpStatus.BAD_REQUEST, "Validation failed", request, fieldErrors);
+        }
         return build(HttpStatus.BAD_REQUEST, "Bad request body", request, null);
     }
 
     @ExceptionHandler(InformationExistsException.class)
     public ResponseEntity<ErrorResponse> handleInformationExists(InformationExistsException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(InformationNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleInformationNotFound(InformationNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabledAccount(DisabledException ex, HttpServletRequest request) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex, HttpServletRequest request) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        return build(HttpStatus.FORBIDDEN, "You do not have permission to perform this action", request, null);
     }
 
     @ExceptionHandler(Exception.class)
