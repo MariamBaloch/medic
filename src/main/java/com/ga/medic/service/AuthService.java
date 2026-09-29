@@ -124,3 +124,16 @@ public class AuthService {
                 + user.getVerificationToken());
         mailSender.send(msg);
     }
+
+    public LoginResponse login(LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.email(), loginRequest.password())
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        MyUserDetails myUserDetails = (MyUserDetails) authentication.getPrincipal();
+        String jwtToken = jwtUtils.generateJwtToken(myUserDetails);
+
+        return new LoginResponse(jwtToken);
+    }
+}

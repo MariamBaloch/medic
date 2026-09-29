@@ -44,4 +44,12 @@ public class AuthController {
                 ? ResponseEntity.ok("Email successfully verified, please login.")
                 : ResponseEntity.badRequest().body("Invalid or expired link.");
     }
+
+    @Operation(summary = "User Login",
+            description = "Authenticates user credentials (email and password) and returns a Bearer JWT token upon successful authentication.")
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
+        LoginResponse response = authService.login(loginRequest);
+        return ResponseEntity.ok(response);
+    }
 }
