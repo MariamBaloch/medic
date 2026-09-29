@@ -1,0 +1,35 @@
+package com.ga.medic.controller;
+
+import com.ga.medic.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/user")
+@Tag(name = "User")
+@SecurityRequirement(name = "bearerAuth")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @Operation(summary = "Upload Profile Picture", description = "Uploads a new profile picture or updates it if already exists and deletes the old one")
+    @PatchMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
+        String imageUrl = userService.updateProfilePicture(file);
+        return ResponseEntity.ok(Map.of("imageUrl", imageUrl));
+    }
+}
