@@ -15,7 +15,6 @@ public record UserRegistrationResponse(
         @Schema(example = "user@example.com")
         String email,
 
-        String imageUrl,
         @Schema(example = "Mariam")
         String firstName,
 
@@ -34,6 +33,8 @@ public record UserRegistrationResponse(
         RoleEnum role,
 
         @Schema(description = "Account status", example = "PENDING_VERIFICATION")
-        UserStatusEnum status
+        UserStatusEnum status,
+
+        AuditResponse audit
 ) {
 }

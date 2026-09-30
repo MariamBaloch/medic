@@ -14,5 +14,7 @@ public interface UserMapper {
 
     @Mapping(source = "id", target = "userId")
     @Mapping(source = "role.name", target = "role")
+    @Mapping(target = "audit.createdAt", source = "createdAt")
+    @Mapping(target = "audit.updatedAt", source = "updatedAt")
     UserRegistrationResponse toResponse(User user);
 }
