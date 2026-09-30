@@ -24,9 +24,6 @@ public class UserRegistrationRequest {
             message = "Password must be at least 5 characters long and contain at least one uppercase letter, one lowercase letter, and one special character")
     public String password;
 
-    @Schema(description = "Profile picture path")
-    public String imageUrl;
-
     @Schema(description = "First name", example = "Mariam", maxLength = 100)
     @NotBlank(message = "First name is required")
     @Size(max = 100, message = "First name must not exceed 100 characters")

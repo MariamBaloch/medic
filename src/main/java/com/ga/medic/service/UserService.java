@@ -14,11 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class UserService {
 
-
     private final UserRepository userRepository;
     private final FileStorageService storageService;
     private final AuthenticatedUser authenticatedUser;
-
 
     @Transactional
     public String updateProfilePicture(MultipartFile file) {
