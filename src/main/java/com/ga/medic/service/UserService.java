@@ -1,7 +1,9 @@
 package com.ga.medic.service;
 
 import com.ga.medic.config.Constants;
+import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.exception.InformationNotFoundException;
+import com.ga.medic.mapper.UserMapper;
 import com.ga.medic.model.User;
 import com.ga.medic.repository.UserRepository;
 import com.ga.medic.security.AuthenticatedUser;
@@ -17,6 +19,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final FileStorageService storageService;
     private final AuthenticatedUser authenticatedUser;
+    private final UserMapper userMapper;
 
     @Transactional
     public String updateProfilePicture(MultipartFile file) {
@@ -43,5 +46,14 @@ public class UserService {
         userRepository.save(user);
 
         return imageUrl;
+    }
+
+    @Transactional
+    public UserAccountResponse getUserAccount() {
+        Long userId = authenticatedUser.getUserId();
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+        return userMapper.toResponse(user);
     }
 }

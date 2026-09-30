@@ -1,5 +1,6 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -8,10 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
@@ -34,5 +32,11 @@ public class UserController {
         return ResponseEntity.ok(Map.of("imageUrl", imageUrl));
     }
 
-
+    @Operation(summary = "Retrieve User Account",
+            description = "Returns the user account information")
+    @GetMapping
+    @PreAuthorize("isAuthenticated()")
+    public UserAccountResponse getUserAccount() {
+        return userService.getUserAccount();
+    }
 }

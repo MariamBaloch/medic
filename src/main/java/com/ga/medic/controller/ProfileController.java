@@ -30,7 +30,7 @@ public class ProfileController {
     @PatchMapping("/patient")
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<PatientProfileResponse> updatePatientProfile(@RequestBody PatientProfileRequest request) {
-        return ResponseEntity.ok().body(profileService.updateUserProfile(request));
+        return ResponseEntity.ok().body(profileService.updatePatientProfile(request));
     }
 
     @Operation(summary = "Update Doctor Profile",
@@ -38,6 +38,6 @@ public class ProfileController {
     @PatchMapping("/doctor")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<DoctorProfileResponse> updateDoctorProfile(@RequestBody DoctorProfileRequest request) {
-        return ResponseEntity.ok().body(profileService.updateUserProfile(request));
+        return ResponseEntity.ok().body(profileService.updateDoctorProfile(request));
     }
 }

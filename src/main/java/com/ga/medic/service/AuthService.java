@@ -4,13 +4,14 @@ import com.ga.medic.dto.request.DoctorRegistrationRequest;
 import com.ga.medic.dto.request.LoginRequest;
 import com.ga.medic.dto.request.UserRegistrationRequest;
 import com.ga.medic.dto.response.LoginResponse;
-import com.ga.medic.dto.response.UserRegistrationResponse;
+import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.enums.RoleEnum;
 import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.UserMapper;
 import com.ga.medic.model.*;
+import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.RoleRepository;
 import com.ga.medic.repository.SpecializationRepository;
 import com.ga.medic.repository.UserRepository;
@@ -45,9 +46,10 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final JavaMailSender mailSender;
     private final SpecializationRepository specializationRepository;
+    private final DoctorProfileRepository doctorProfileRepository;
 
     @Transactional
-    public UserRegistrationResponse registerPatient(UserRegistrationRequest request) {
+    public UserAccountResponse registerPatient(UserRegistrationRequest request) {
         User user = createUser(request, RoleEnum.PATIENT);
 
         PatientProfile profile = new PatientProfile();
@@ -59,7 +61,7 @@ public class AuthService {
     }
 
     @Transactional
-    public UserRegistrationResponse registerDoctor(DoctorRegistrationRequest request) {
+    public UserAccountResponse registerDoctor(DoctorRegistrationRequest request) {
         User user = createUser(request, RoleEnum.DOCTOR);
 
         Specialization specialization = specializationRepository
@@ -67,6 +69,9 @@ public class AuthService {
                 .orElseThrow(() ->
                         new InformationNotFoundException("Specialization with id " + request.getSpecializationId() + " not found"));
 
+        if (doctorProfileRepository.existsByLicenseNumber(request.getLicenseNumber())) {
+            throw new InformationExistsException("License number is already registered");
+        }
         DoctorProfile profile = new DoctorProfile();
         profile.setUser(user);
         profile.setSpecialization(specialization);

@@ -4,7 +4,7 @@ import com.ga.medic.dto.request.DoctorRegistrationRequest;
 import com.ga.medic.dto.request.LoginRequest;
 import com.ga.medic.dto.request.UserRegistrationRequest;
 import com.ga.medic.dto.response.LoginResponse;
-import com.ga.medic.dto.response.UserRegistrationResponse;
+import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,14 +25,14 @@ public class AuthController {
     @Operation(summary = "Register a patient",
             description = "Creates a patient account in PENDING_VERIFICATION status and emails a verification link (valid 24 hours).")
     @PostMapping("/register/patient")
-    public ResponseEntity<UserRegistrationResponse> registerPatient(@Valid @RequestBody UserRegistrationRequest request) {
+    public ResponseEntity<UserAccountResponse> registerPatient(@Valid @RequestBody UserRegistrationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerPatient(request));
     }
 
     @Operation(summary = "Register a doctor",
             description = "Creates a doctor account in PENDING_VERIFICATION status and emails a verification link (valid 24 hours).")
     @PostMapping("/register/doctor")
-    public ResponseEntity<UserRegistrationResponse> registerDoctor(@Valid @RequestBody DoctorRegistrationRequest request) {
+    public ResponseEntity<UserAccountResponse> registerDoctor(@Valid @RequestBody DoctorRegistrationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerDoctor(request));
     }
 

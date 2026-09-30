@@ -26,7 +26,7 @@ public class ProfileService {
     private final DoctorProfileRepository doctorProfileRepository;
 
     @Transactional
-    public PatientProfileResponse updateUserProfile(PatientProfileRequest request) {
+    public PatientProfileResponse updatePatientProfile(PatientProfileRequest request) {
         Long userId = authenticatedUser.getUserId();
 
         PatientProfile profile = patientProfileRepository
@@ -38,7 +38,7 @@ public class ProfileService {
     }
 
     @Transactional
-    public DoctorProfileResponse updateUserProfile(DoctorProfileRequest request) {
+    public DoctorProfileResponse updateDoctorProfile(DoctorProfileRequest request) {
         Long userId = authenticatedUser.getUserId();
 
         DoctorProfile profile = doctorProfileRepository

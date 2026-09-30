@@ -1,6 +1,7 @@
 package com.ga.medic.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ga.medic.enums.GenderEnum;
 import com.ga.medic.enums.RoleEnum;
 import com.ga.medic.enums.UserStatusEnum;
@@ -8,7 +9,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
 
-public record UserRegistrationResponse(
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record UserAccountResponse(
         @Schema(example = "1")
         Long userId,
 
@@ -35,6 +37,16 @@ public record UserRegistrationResponse(
         @Schema(description = "Account status", example = "PENDING_VERIFICATION")
         UserStatusEnum status,
 
+        @Schema(description = "Profile image URL")
+        String imageUrl,
+
+        @Schema(description = "Present only when role is PATIENT")
+        PatientProfileResponse patient,
+
+        @Schema(description = "Present only when role is DOCTOR")
+        DoctorProfileResponse doctor,
+
         AuditResponse audit
 ) {
 }
+
