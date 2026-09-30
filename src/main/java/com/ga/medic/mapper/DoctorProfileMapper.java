@@ -11,9 +11,6 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface DoctorProfileMapper {
 
-    @Mapping(target = "specialization.id", source = "specializationId")
-    DoctorProfile toDoctorProfile(DoctorProfileRequest request);
-
     @Mapping(target = "specializationId", source = "specialization.id")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
