@@ -25,11 +25,14 @@ public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "Upload Profile Picture", description = "Uploads a new profile picture or updates it if already exists and deletes the old one")
+    @Operation(summary = "Upload Profile Picture",
+            description = "Uploads a new profile picture or updates it if already exists and deletes the old one")
     @PatchMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, String>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
         String imageUrl = userService.updateProfilePicture(file);
         return ResponseEntity.ok(Map.of("imageUrl", imageUrl));
     }
+
+
 }
