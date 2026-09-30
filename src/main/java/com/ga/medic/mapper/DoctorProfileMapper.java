@@ -1,14 +1,14 @@
 package com.ga.medic.mapper;
 
+import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.DoctorProfileRequest;
 import com.ga.medic.dto.response.DoctorProfileResponse;
 import com.ga.medic.model.DoctorProfile;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
-import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(config = GlobalMapperConfig.class)
 public interface DoctorProfileMapper {
 
     @Mapping(target = "specializationId", source = "specialization.id")

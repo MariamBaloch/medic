@@ -1,14 +1,13 @@
 package com.ga.medic.mapper;
 
+import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.UserRegistrationRequest;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.model.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring",
-        unmappedTargetPolicy = ReportingPolicy.IGNORE,
+@Mapper(config = GlobalMapperConfig.class,
         uses = {DoctorProfileMapper.class, PatientProfileMapper.class})
 public interface UserMapper {
 
