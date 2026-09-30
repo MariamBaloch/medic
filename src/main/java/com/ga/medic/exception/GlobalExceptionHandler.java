@@ -57,17 +57,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<ErrorResponse> handleDisabledAccount(DisabledException ex, HttpServletRequest request) {
-        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+        return build(HttpStatus.FORBIDDEN, "Verify your email to activate your account", request, null);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleDisabledAccount(IllegalArgumentException ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(LockedException.class)
-    public ResponseEntity<ErrorResponse> handleDisabledAccount(LockedException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
+    public ResponseEntity<ErrorResponse> handleLockedAccount(LockedException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Please wait until your account has been verified", request, null);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
