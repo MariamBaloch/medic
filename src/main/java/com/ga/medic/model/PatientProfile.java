@@ -20,9 +20,6 @@ public class PatientProfile extends Auditable {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(unique = true, length = 50)
-    private String nationalId;
-
     @Column
     private String address;
 
