@@ -64,6 +64,8 @@ public class User extends Auditable {
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private PatientProfile patientProfile;
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private DoctorProfile doctorProfile;
 
     public void setPatientProfile(PatientProfile patientProfile) {
         this.patientProfile = patientProfile;
@@ -72,14 +74,15 @@ public class User extends Auditable {
         }
     }
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private DoctorProfile doctorProfile;
-
     public void setDoctorProfile(DoctorProfile doctorProfile) {
         this.doctorProfile = doctorProfile;
         if (doctorProfile != null) {
             doctorProfile.setUser(this);
         }
+    }
+
+    public String getFullName() {
+        return firstName + " " + lastName;
     }
 
 }

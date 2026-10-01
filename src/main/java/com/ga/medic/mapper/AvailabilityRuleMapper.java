@@ -8,6 +8,8 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
+import java.util.List;
+
 @Mapper(config = GlobalMapperConfig.class)
 public interface AvailabilityRuleMapper {
 
@@ -18,4 +20,6 @@ public interface AvailabilityRuleMapper {
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
     AvailabilityRuleResponse toResponse(AvailabilityRule rule);
+
+    List<AvailabilityRuleResponse> toResponseList(List<AvailabilityRule> rules);
 }

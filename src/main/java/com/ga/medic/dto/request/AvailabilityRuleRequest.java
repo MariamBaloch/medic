@@ -1,6 +1,7 @@
 package com.ga.medic.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.FutureOrPresent;
@@ -41,18 +42,21 @@ public record AvailabilityRuleRequest(
 
 ) {
     @AssertTrue(message = "End time must be after start time")
+    @JsonIgnore
     public boolean isEndTimeAfterStartTime() {
         if (startTime == null || endTime == null) return true;
         return endTime.isAfter(startTime);
     }
 
     @AssertTrue(message = "End date must be after start date")
+    @JsonIgnore
     public boolean isEndDateAfterStartDate() {
         if (endDate == null || startDate == null) return true;
         return endDate.isAfter(startDate);
     }
 
     @AssertTrue(message = "Slot duration must be either 15 or 30 minutes")
+    @JsonIgnore
     public boolean isValidSlotMinutes() {
         return slotMinutes == null || slotMinutes == 15 || slotMinutes == 30;
     }
