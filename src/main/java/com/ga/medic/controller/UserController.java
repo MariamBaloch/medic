@@ -18,6 +18,7 @@ import java.util.Map;
 @RequestMapping("/api/user")
 @Tag(name = "User")
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -26,7 +27,6 @@ public class UserController {
     @Operation(summary = "Upload Profile Picture",
             description = "Uploads a new profile picture or updates it if already exists and deletes the old one")
     @PatchMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, String>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
         String imageUrl = userService.updateProfilePicture(file);
         return ResponseEntity.ok(Map.of("imageUrl", imageUrl));
@@ -35,7 +35,6 @@ public class UserController {
     @Operation(summary = "Retrieve User Account",
             description = "Returns the user account information")
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
     public UserAccountResponse getUserAccount() {
         return userService.getUserAccount();
     }
