@@ -14,7 +14,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -33,15 +32,10 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Validation failed", request, fieldErrors);
     }
 
+    //TODO figure out how to handle HttpMessageNotReadableException for bad date and time input
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
-        Throwable root = ex.getMostSpecificCause();
-        if (root instanceof DateTimeException) {
-            Map<String, String> fieldErrors = new LinkedHashMap<>();
-            fieldErrors.put("dateOfBirth", "Must be a valid date in the format dd/MM/yyyy");
-            return build(HttpStatus.BAD_REQUEST, "Validation failed", request, fieldErrors);
-        }
-        return build(HttpStatus.BAD_REQUEST, "Bad request body", request, null);
+    public ResponseEntity<ErrorResponse> handleMessageNotReadableException(Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(InformationExistsException.class)
