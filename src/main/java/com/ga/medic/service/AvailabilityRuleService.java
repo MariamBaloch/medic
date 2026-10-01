@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
+import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityRuleResponse;
 import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
 import com.ga.medic.exception.InformationExistsException;
@@ -58,6 +59,47 @@ public class AvailabilityRuleService {
         rule.setDoctor(doctor);
         rule = ruleRepository.save(rule);
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(rule), null, null);
+    }
+
+    /*
+     * Deletes an availability rule.
+     * Hard deletes the rule if it hasn't started and detaches any appointments associated with it.
+     * Soft deletes the rule if it has started by setting the end date to yesterday.
+     */
+    @Transactional
+    public AvailabilityRuleDeleteResponse deleteRule(Long ruleId) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+
+        AvailabilityRule rule = ruleRepository.findByIdAndDoctorId(ruleId, doctor.getId())
+                .orElseThrow(() -> new InformationNotFoundException("Availability rule not found"));
+
+        LocalDate today = LocalDate.now();
+        List<Appointment> affectedAppointments = new ArrayList<>();
+        boolean hardDeleted;
+        String message = null;
+
+        if (rule.getStartDate().isAfter(today)) {
+            affectedAppointments = appointmentRepository.findByAvailabilityRuleId(ruleId);
+
+            for (Appointment appointment : affectedAppointments) {
+                appointment.setAvailabilityRule(null);
+            }
+
+            appointmentRepository.saveAll(affectedAppointments);
+            ruleRepository.delete(rule);
+
+            hardDeleted = true;
+            if (!affectedAppointments.isEmpty()) {
+                message = affectedAppointments.size() + " existing appointment(s) were detached from the deleted rule";
+            }
+        } else {
+            rule.setEndDate(today.minusDays(1));
+            ruleRepository.save(rule);
+            hardDeleted = false;
+        }
+
+        List<AppointmentResponse> affectedAppointmentResponses = appointmentMapper.toResponseList(affectedAppointments);
+        return new AvailabilityRuleDeleteResponse(true, affectedAppointmentResponses, message);
     }
 
     /**

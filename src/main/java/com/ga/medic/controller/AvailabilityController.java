@@ -2,6 +2,7 @@ package com.ga.medic.controller;
 
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
+import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityRuleResponse;
 import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
 import com.ga.medic.service.AvailabilityRuleService;
@@ -48,5 +49,11 @@ public class AvailabilityController {
         return ResponseEntity.ok(availabilityRuleService.updateRule(id, request));
     }
 
+    @Operation(summary = "Delete availability rule",
+            description = "Delete a rule. Hard-deletes rules that haven't started, soft-deletes (sets endDate to yesterday) active rules.")
+    @DeleteMapping("/rules/{id}")
+    public ResponseEntity<AvailabilityRuleDeleteResponse> deleteRule(@PathVariable Long id) {
+        return ResponseEntity.ok(availabilityRuleService.deleteRule(id));
+    }
 
 }

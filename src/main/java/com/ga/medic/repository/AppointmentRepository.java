@@ -16,4 +16,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
     List<Appointment> findActiveByDoctorAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    List<Appointment> findByAvailabilityRuleId(Long ruleId);
+
 }
