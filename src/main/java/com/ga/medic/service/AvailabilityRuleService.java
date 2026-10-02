@@ -13,6 +13,7 @@ import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityExceptionRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
+import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class AvailabilityRuleService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentMapper appointmentMapper;
     private final AvailabilityExceptionRepository exceptionRepository;
+    private final DoctorProfileRepository doctorProfileRepository;
 
     /**
      * Returns all current and future availability rules for the logged-in doctor.
@@ -160,6 +162,14 @@ public class AvailabilityRuleService {
         List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctor.getId(), from, to);
 
         return new DoctorCalendarResponse(slots, appointmentMapper.toResponseList(appointments));
+    }
+
+    @Transactional
+    public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to) {
+        if (!doctorProfileRepository.existsById(doctorId)) {
+            throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
+        }
+        return computeAvailableSlots(doctorId, from, to);
     }
 
     /**

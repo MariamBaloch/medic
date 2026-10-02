@@ -1,15 +1,28 @@
 package com.ga.medic.mapper;
 
 import com.ga.medic.config.GlobalMapperConfig;
+import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.model.Appointment;
+import com.ga.medic.model.DoctorProfile;
+import com.ga.medic.model.PatientProfile;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.time.LocalTime;
 import java.util.List;
 
 @Mapper(config = GlobalMapperConfig.class)
 public interface AppointmentMapper {
+
+    @Mapping(target = "doctor", source = "doctor")
+    @Mapping(target = "patient", source = "patient")
+    @Mapping(target = "appointmentDate", source = "request.date")
+    @Mapping(target = "startTime", source = "request.startTime")
+    @Mapping(target = "endTime", source = "endTime")
+    @Mapping(target = "status", constant = "BOOKED")
+    @Mapping(target = "reason", source = "request.reason")
+    Appointment toEntity(AppointmentBookingRequest request, DoctorProfile doctor, PatientProfile patient, LocalTime endTime);
 
     @Mapping(target = "doctorId", source = "doctor.id")
     @Mapping(target = "doctorName", source = "doctor.user.fullName")

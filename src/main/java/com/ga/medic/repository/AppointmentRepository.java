@@ -35,4 +35,15 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     Page<Appointment> findByPatientId(Long patientId, Pageable pageable);
 
+    /**
+     * Check if a patient already has a not canceled appointment at the given time
+     */
+    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.patient.id = :patientId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
+    boolean existsOverlappingForPatient(@Param("patientId") Long patientId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
+
+    /**
+     * Check if a specific slot is already taken (non-canceled).
+     */
+    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.doctor.id = :doctorId AND a.appointmentDate = :date AND a.startTime = :startTime AND a.status <> AppointmentStatusEnum.CANCELLED")
+    boolean existsActiveByDoctorAndSlot(@Param("doctorId") Long doctorId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime);
 }
