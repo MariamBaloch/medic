@@ -7,10 +7,12 @@ import com.ga.medic.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -78,8 +80,19 @@ public class AuthController {
     @PostMapping("/change-password")
     @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<String> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        authService.changePassword(request);
-        return ResponseEntity.ok("Password updated successfully.");
+    public ResponseEntity<String> changePassword(@Valid @RequestBody ChangePasswordRequest passwordRequest, HttpServletRequest request) {
+        authService.changePassword(passwordRequest);
+        authService.logout(request.getHeader(HttpHeaders.AUTHORIZATION));
+        return ResponseEntity.ok("Password updated successfully. Please login again with new credentials.");
+    }
+
+    @Operation(summary = "User Logout",
+            description = "Invalidates the current JWT token so it can no longer be used for authentication.")
+    @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<String> logout(HttpServletRequest request) {
+        authService.logout(request.getHeader(HttpHeaders.AUTHORIZATION));
+        return ResponseEntity.ok("Logged out successfully.");
     }
 }

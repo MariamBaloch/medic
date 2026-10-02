@@ -1,5 +1,6 @@
 package com.ga.medic.security;
 
+import com.ga.medic.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private MyUserDetailsService myUserDetailsService;
 
     @Autowired
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Autowired
     private JWTUtils jwtUtils;
 
     private String parseJwt(HttpServletRequest request) {
@@ -39,6 +43,14 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         try {
             String jwt = parseJwt(request);
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+
+                String jti = jwtUtils.getJtiFromJwtToken(jwt);
+                if (tokenBlacklistService.isBlacklisted(jti)) {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.getWriter().write("Token has been revoked");
+                    return;
+                }
+
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
                 UserDetails userDetails = this.myUserDetailsService.loadUserByUsername(username);

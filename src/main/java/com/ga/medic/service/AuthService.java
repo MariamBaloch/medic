@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.UUID;
 
 @Service
@@ -47,6 +48,7 @@ public class AuthService {
     private final SpecializationRepository specializationRepository;
     private final DoctorProfileRepository doctorProfileRepository;
     private final AuthenticatedUser authenticatedUser;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Transactional
     public UserAccountResponse registerPatient(UserRegistrationRequest request) {
@@ -192,5 +194,13 @@ public class AuthService {
                 + "Use this token to reset your password by sending a POST request to /auth/users/reset-password with your token and new password.\n\n"
                 + "This token will expire in 15 minutes.");
         mailSender.send(msg);
+    }
+
+    public void logout(String authHeader) {
+        String JwtToken = authHeader.substring(7);
+        String jti = jwtUtils.getJtiFromJwtToken(JwtToken);
+        Date expiresAt = jwtUtils.getExpirationFromJwtToken(JwtToken);
+
+        tokenBlacklistService.blacklist(jti, expiresAt);
     }
 }
