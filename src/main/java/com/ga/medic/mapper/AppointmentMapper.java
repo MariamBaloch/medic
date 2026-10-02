@@ -15,6 +15,7 @@ import java.util.List;
 @Mapper(config = GlobalMapperConfig.class)
 public interface AppointmentMapper {
 
+    @Mapping(target = "id", ignore = true)
     @Mapping(target = "doctor", source = "doctor")
     @Mapping(target = "patient", source = "patient")
     @Mapping(target = "appointmentDate", source = "request.date")

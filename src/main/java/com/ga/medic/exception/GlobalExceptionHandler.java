@@ -43,6 +43,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(SlotNotAvailableException.class)
+    public ResponseEntity<ErrorResponse> handleSlotNotAvailableExceptions(SlotNotAvailableException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(InformationNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleInformationNotFound(InformationNotFoundException ex, HttpServletRequest request) {
         log.warn("Not found on {}: {}", request.getRequestURI(), ex.getMessage());
