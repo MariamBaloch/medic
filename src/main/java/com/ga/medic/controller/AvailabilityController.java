@@ -5,17 +5,21 @@ import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityRuleResponse;
 import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
+import com.ga.medic.dto.response.DoctorCalendarResponse;
 import com.ga.medic.service.AvailabilityRuleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -56,4 +60,14 @@ public class AvailabilityController {
         return ResponseEntity.ok(availabilityRuleService.deleteRule(id));
     }
 
+    @Operation(summary = "Get doctor calendar",
+            description = "Returns available slots (computed from rules) and booked appointments for the date range")
+    @GetMapping("/calendar")
+    public ResponseEntity<DoctorCalendarResponse> getCalendar(
+            @Parameter(description = "Start date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate from,
+            @Parameter(description = "End date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate to) {
+        return ResponseEntity.ok(availabilityRuleService.getCalendar(from, to));
+    }
 }

@@ -20,4 +20,11 @@ public interface AvailabilityRuleRepository extends JpaRepository<AvailabilityRu
     List<AvailabilityRule> findCurrentAndFuture(@Param("doctorId") Long doctorId, @Param("today") LocalDate today);
 
     Optional<AvailabilityRule> findByIdAndDoctorId(Long ruleId, Long id);
+
+
+    /**
+     * Finds availability rules for a specific doctor that overlap with a given date range.
+     */
+    @Query("SELECT r FROM AvailabilityRule r WHERE r.doctor.id = :doctorId AND r.startDate <= :to AND (r.endDate IS NULL OR r.endDate >= :from)")
+    List<AvailabilityRule> findByDoctorIdAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

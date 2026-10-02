@@ -20,6 +20,16 @@ public interface AvailabilityExceptionRepository extends JpaRepository<Availabil
 
     Optional<AvailabilityException> findByIdAndDoctorId(Long exceptionId, Long id);
 
+    /**
+     * Retrieves a list of current and future availability exceptions for a specific doctor,
+     * ordered by the exception date.
+     */
     @Query("SELECT e FROM AvailabilityException e WHERE e.doctor.id = :doctorId AND e.exceptionDate >= :today ORDER BY e.exceptionDate")
     List<AvailabilityException> findCurrentAndFutureByDoctorId(@Param("doctorId") Long doctorId, @Param("today") LocalDate today);
+
+    /**
+     * All exceptions for a doctor within a date range.
+     */
+    @Query("SELECT e FROM AvailabilityException e WHERE e.doctor.id = :doctorId AND e.exceptionDate >= :from AND e.exceptionDate <= :to")
+    List<AvailabilityException> findByDoctorAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

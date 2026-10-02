@@ -1,18 +1,17 @@
 package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
-import com.ga.medic.dto.response.AppointmentResponse;
-import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
-import com.ga.medic.dto.response.AvailabilityRuleResponse;
-import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
+import com.ga.medic.dto.response.*;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AvailabilityRuleMapper;
 import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AvailabilityException;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AvailabilityExceptionRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.time.LocalTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +33,7 @@ public class AvailabilityRuleService {
     private final AvailabilityRuleMapper ruleMapper;
     private final AppointmentRepository appointmentRepository;
     private final AppointmentMapper appointmentMapper;
+    private final AvailabilityExceptionRepository exceptionRepository;
 
     /**
      * Returns all current and future availability rules for the logged-in doctor.
@@ -150,6 +149,20 @@ public class AvailabilityRuleService {
     }
 
     /**
+     * Retrieves the calendar for a doctor within a specified date range, including available slots and active appointments.
+     */
+    @Transactional
+    public DoctorCalendarResponse getCalendar(LocalDate from, LocalDate to) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to);
+
+        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctor.getId(), from, to);
+
+        return new DoctorCalendarResponse(slots, appointmentMapper.toResponseList(appointments));
+    }
+
+    /**
      * Finds future active appointments that fall outside the schedule defined by the given availability rule.
      * Appointments are not deleted or canceled; they are returned to inform the doctor that they are outside the new schedule.
      */
@@ -198,4 +211,87 @@ public class AvailabilityRuleService {
             }
         }
     }
+
+
+    /**
+     * Computes a list of available slots for a doctor within a specified date range.
+     * The availability is determined based on predefined rules, exceptions, and existing appointments.
+     */
+    private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to) {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        List<AvailabilityRule> rules = ruleRepository.findByDoctorIdAndDateRange(doctorId, from, to);
+        List<AvailabilityException> exceptions = exceptionRepository.findByDoctorAndDateRange(doctorId, from, to);
+        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
+
+        // Store appointment keys for quick lookup
+        Set<String> appointmentKeys = appointments.stream().map(a -> a.getAppointmentDate() + "|" + a.getStartTime()).collect(Collectors.toSet());
+
+        // Tracks slots already added to results. Prevents the same slot appearing twice in case two overlapping rules generate it
+        Set<SlotKey> seenSlots = new HashSet<>();
+        List<AvailableSlotResponse> availableSlots = new ArrayList<>();
+
+        for (AvailabilityRule rule : rules) {
+            // if rule starts before requested period, use requested period start
+            LocalDate ruleStartDate = rule.getStartDate().isBefore(from) ? from : rule.getStartDate();
+            // if rule ends after requested period, use requested period end
+            LocalDate ruleEndDate = (rule.getEndDate() != null && rule.getEndDate().isBefore(to)) ? rule.getEndDate() : to;
+
+            for (LocalDate day = ruleStartDate; !day.isAfter(ruleEndDate); day = day.plusDays(1)) {
+                if (!rule.getDaysOfWeek().contains(day.getDayOfWeek())) continue;
+                if (day.isBefore(today)) continue;
+
+                int slotMinutes = rule.getSlotMinutes();
+                LocalTime startTimePointer = rule.getStartTime();
+
+                // generate slots from rule start time will end time in slot minute intervals
+                while (!startTimePointer.plusMinutes(slotMinutes).isAfter(rule.getEndTime())) {
+                    LocalTime slotEnd = startTimePointer.plusMinutes(slotMinutes);
+                    final LocalDate slotDate = day;
+                    final LocalTime slotStart = startTimePointer;
+
+                    // Skip past slots on today
+                    if (slotDate.equals(today) && slotStart.isBefore(now)) {
+                        startTimePointer = slotEnd;
+                        continue;
+                    }
+
+                    // Skip if already booked
+                    if (appointmentKeys.contains(slotDate + "|" + slotStart)) {
+                        startTimePointer = slotEnd;
+                        continue;
+                    }
+
+                    // Skip if in an exception window
+                    boolean inException = exceptions.stream().anyMatch(ex -> {
+                        if (!ex.getExceptionDate().equals(slotDate)) return false;
+                        // Whole-day exception
+                        if (ex.getStartTime() == null && ex.getEndTime() == null) return true;
+                        // Time-window exception: slot interval overlaps exception window
+                        return slotStart.isBefore(ex.getEndTime()) && slotEnd.isAfter(ex.getStartTime());
+                    });
+
+                    if (inException) {
+                        startTimePointer = slotEnd;
+                        continue;
+                    }
+
+                    // Skip if same slot has already been added by another rule
+                    if (seenSlots.add(new SlotKey(slotDate, slotStart))) {
+                        availableSlots.add(new AvailableSlotResponse(slotDate, slotStart, slotEnd, slotMinutes));
+                    }
+
+                    startTimePointer = slotEnd;
+                }
+            }
+        }
+
+        availableSlots.sort(Comparator.comparing(AvailableSlotResponse::date).thenComparing(AvailableSlotResponse::startTime));
+        return availableSlots;
+    }
+
+    private record SlotKey(LocalDate date, LocalTime startTime) {
+    }
+
 }
