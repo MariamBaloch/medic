@@ -1,17 +1,19 @@
 package com.ga.medic.controller;
 
-import com.ga.medic.dto.request.DoctorRegistrationRequest;
-import com.ga.medic.dto.request.LoginRequest;
-import com.ga.medic.dto.request.UserRegistrationRequest;
+import com.ga.medic.dto.request.*;
 import com.ga.medic.dto.response.LoginResponse;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Authentication", description = "Registration, email verification and login")
@@ -51,5 +53,33 @@ public class AuthController {
     public ResponseEntity<LoginResponse> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse response = authService.login(loginRequest);
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Forgot Password",
+            description = "Sends a password reset token link to the user's registered email address.")
+    @PostMapping("/forgot-password")
+    public ResponseEntity<String> forgotPassword(@RequestParam @NotBlank(message = "Email is required") @Email(message = "Invalid email format") String email) {
+        authService.forgotPassword(email);
+        return ResponseEntity.ok("Password reset email sent successfully.");
+    }
+
+    @Operation(summary = "Reset Password",
+            description = "Resets the user password using a valid reset token.")
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        boolean isReset = authService.resetPassword(request);
+        return isReset
+                ? ResponseEntity.ok("Password has been reset successfully. Please login with your new password.")
+                : ResponseEntity.badRequest().body("Token is invalid or has expired.");
+    }
+
+    @Operation(summary = "Change Password",
+            description = "Allows an authenticated user to change their password by providing the current password.")
+    @PostMapping("/change-password")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<String> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ResponseEntity.ok("Password updated successfully.");
     }
 }

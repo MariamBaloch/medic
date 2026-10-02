@@ -36,14 +36,10 @@ public class SecurityConfiguration {
                 .sessionManagement(
                         (session) -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
-                        auth -> auth.requestMatchers(
-                                        "/auth/users",
-                                        "/auth/users/register/",
-                                        "/auth/users/login/",
-                                        "/auth/users/login/**",
-                                        "/auth/users/register/**",
-                                        "/auth/users/verify",
-                                        "/auth/users/verify/**",
+                        auth -> auth
+                                .requestMatchers("/auth/users/change-password").authenticated()
+                                .requestMatchers(
+                                        "/auth/users/**",
                                         "/v3/api-docs/**",
                                         "/v3/api-docs.yaml",
                                         "/swagger-ui/**",

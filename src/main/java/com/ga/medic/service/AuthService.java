@@ -1,8 +1,6 @@
 package com.ga.medic.service;
 
-import com.ga.medic.dto.request.DoctorRegistrationRequest;
-import com.ga.medic.dto.request.LoginRequest;
-import com.ga.medic.dto.request.UserRegistrationRequest;
+import com.ga.medic.dto.request.*;
 import com.ga.medic.dto.response.LoginResponse;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.enums.RoleEnum;
@@ -15,6 +13,7 @@ import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.RoleRepository;
 import com.ga.medic.repository.SpecializationRepository;
 import com.ga.medic.repository.UserRepository;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.security.JWTUtils;
 import com.ga.medic.security.MyUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +46,7 @@ public class AuthService {
     private final JavaMailSender mailSender;
     private final SpecializationRepository specializationRepository;
     private final DoctorProfileRepository doctorProfileRepository;
+    private final AuthenticatedUser authenticatedUser;
 
     @Transactional
     public UserAccountResponse registerPatient(UserRegistrationRequest request) {
@@ -140,5 +140,57 @@ public class AuthService {
         String jwtToken = jwtUtils.generateJwtToken(myUserDetails);
 
         return new LoginResponse(jwtToken);
+    }
+
+    @Transactional
+    public void forgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new InformationNotFoundException("User with email " + email + " not found"));
+
+        String resetToken = UUID.randomUUID().toString();
+        user.setResetPasswordToken(resetToken);
+        user.setResetPasswordTokenExpiry(LocalDateTime.now().plusMinutes(15));
+
+        userRepository.save(user);
+
+        sendPasswordResetEmail(user.getEmail(), resetToken);
+    }
+
+    @Transactional
+    public boolean resetPassword(ResetPasswordRequest request) {
+        User user = userRepository.findByResetPasswordToken(request.token())
+                .orElseThrow(() -> new InformationNotFoundException("Invalid or expired password reset token"));
+
+        if (user.getResetPasswordTokenExpiry().isBefore(LocalDateTime.now())) {
+            return false;
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.setResetPasswordToken(null);
+        user.setResetPasswordTokenExpiry(null);
+        userRepository.save(user);
+
+        return true;
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        User user = authenticatedUser.get().user();
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Current password does not match");
+        }
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+    }
+
+    private void sendPasswordResetEmail(String email, String token) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(email);
+        msg.setSubject("Password Reset Token");
+        msg.setText("Your password reset token is:\n\n"
+                + token + "\n\n"
+                + "Use this token to reset your password by sending a POST request to /auth/users/reset-password with your token and new password.\n\n"
+                + "This token will expire in 15 minutes.");
+        mailSender.send(msg);
     }
 }
