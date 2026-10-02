@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/profile")
-@Tag(name = "Profile")
+@Tag(name = "Profile", description = "Patient and doctor profile management")
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 public class ProfileController {

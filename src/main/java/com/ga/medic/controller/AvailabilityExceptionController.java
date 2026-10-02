@@ -18,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/doctors/availability/exceptions")
-@Tag(name = "Doctor Availability")
+@Tag(name = "Doctor Availability", description = "Doctor availability exceptions")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('DOCTOR')")
 @RequiredArgsConstructor

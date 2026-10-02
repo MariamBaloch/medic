@@ -16,7 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/user")
-@Tag(name = "User")
+@Tag(name = "User", description = "User account management")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
