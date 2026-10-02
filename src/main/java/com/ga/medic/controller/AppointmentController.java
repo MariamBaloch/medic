@@ -1,6 +1,7 @@
 package com.ga.medic.controller;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
@@ -46,6 +47,13 @@ public class AppointmentController {
             description = "Book an appointment with a doctor. The system validates the slot is truly available against current rules and prevents double-booking.")
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentBookingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.bookAppointment(request));
+    }
+
+    @Operation(summary = "Cancel an appointment",
+            description = "Cancel an appointment. The freed slot reappears automatically if the current rules still produce it.")
+    @PutMapping("/appointments/{id}/cancel")
+    public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable Long id, @Valid @RequestBody CancelAppointmentRequest request) {
+        return ResponseEntity.ok(appointmentService.cancelAppointment(id, request));
     }
 
     @Operation(summary = "Get doctor availability",

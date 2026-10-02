@@ -1,17 +1,22 @@
 package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.model.PatientProfile;
 import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.PatientProfileRepository;
 import com.ga.medic.security.AuthenticatedUser;
@@ -30,6 +35,7 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final DoctorProfileRepository doctorProfileRepository;
     private final PatientProfileRepository patientProfileRepository;
+    private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
     private final AvailabilityExceptionService availabilityExceptionService;
     private final AppointmentMapper appointmentMapper;
@@ -60,6 +66,9 @@ public class AppointmentService {
                 .findFirst()
                 .orElseThrow(() -> new SlotNotAvailableException("The requested slot on " + request.date() + " at " + request.startTime() + " is not available. It may have been booked, is in the past, or does not match the doctor's schedule."));
 
+        AvailabilityRule rule = availabilityRuleRepository.findById(matchingSlot.ruleId())
+                .orElseThrow(() -> new InformationNotFoundException("Availability rule with id " + matchingSlot.ruleId() + " not found"));
+
         LocalTime endTime = matchingSlot.endTime();
 
         // Check if patient already has an appointment at this time
@@ -72,10 +81,37 @@ public class AppointmentService {
             throw new SlotNotAvailableException("This slot has just been booked by another patient");
         }
 
-        Appointment appointment = appointmentMapper.toEntity(request, doctor, patient, endTime);
+        Appointment appointment = appointmentMapper.toEntity(request, doctor, patient, rule, endTime);
         appointment = appointmentRepository.save(appointment);
         return appointmentMapper.toResponse(appointment);
     }
 
+    /**
+     * Cancels an appointment belonging to the authenticated patient.
+     */
+    @Transactional
+    public AppointmentResponse cancelAppointment(Long appointmentId, CancelAppointmentRequest request) {
+        Long currentUserId = authenticatedUser.getUserId();
+
+        Appointment appointment = appointmentRepository.findById(appointmentId).orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
+
+        if (!appointment.getPatient().getUser().getId().equals(currentUserId)) {
+            throw new ForbiddenActionException("You can only cancel your own appointments");
+        }
+
+        if (appointment.getStatus() == AppointmentStatusEnum.CANCELLED) {
+            throw new IllegalArgumentException("This appointment is already cancelled");
+        }
+
+        if (appointment.getStatus() == AppointmentStatusEnum.COMPLETED) {
+            throw new IllegalArgumentException("Cannot cancel a completed appointment");
+        }
+
+        appointment.setStatus(AppointmentStatusEnum.CANCELLED);
+        appointment.setCancelledReason(request.reason());
+        appointment = appointmentRepository.save(appointment);
+
+        return appointmentMapper.toResponse(appointment);
+    }
 
 }

@@ -4,6 +4,7 @@ import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.model.PatientProfile;
 import org.mapstruct.Mapper;
@@ -23,7 +24,8 @@ public interface AppointmentMapper {
     @Mapping(target = "endTime", source = "endTime")
     @Mapping(target = "status", constant = "BOOKED")
     @Mapping(target = "reason", source = "request.reason")
-    Appointment toEntity(AppointmentBookingRequest request, DoctorProfile doctor, PatientProfile patient, LocalTime endTime);
+    @Mapping(target = "availabilityRule", source = "rule")
+    Appointment toEntity(AppointmentBookingRequest request, DoctorProfile doctor, PatientProfile patient, AvailabilityRule rule, LocalTime endTime);
 
     @Mapping(target = "doctorId", source = "doctor.id")
     @Mapping(target = "doctorName", source = "doctor.user.fullName")

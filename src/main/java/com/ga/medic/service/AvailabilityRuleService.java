@@ -289,7 +289,7 @@ public class AvailabilityRuleService {
 
                     // Skip if same slot has already been added by another rule
                     if (seenSlots.add(new SlotKey(slotDate, slotStart))) {
-                        availableSlots.add(new AvailableSlotResponse(slotDate, slotStart, slotEnd, slotMinutes));
+                        availableSlots.add(new AvailableSlotResponse(rule.getId(), slotDate, slotStart, slotEnd, slotMinutes));
                     }
 
                     startTimePointer = slotEnd;

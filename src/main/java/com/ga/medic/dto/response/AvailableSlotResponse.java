@@ -8,6 +8,8 @@ import java.time.LocalTime;
 
 @Schema(description = "A single available time slot")
 public record AvailableSlotResponse(
+        @Schema(description = "Available rule id", example = "1")
+        Long ruleId,
 
         @Schema(description = "Date of the slot", example = "05/10/2026")
         @JsonFormat(pattern = "dd/MM/yyyy")
