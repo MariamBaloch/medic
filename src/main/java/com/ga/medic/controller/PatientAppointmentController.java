@@ -28,11 +28,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/patient/appointments")
-@Tag(name = "Appointments", description = "Patient appointment booking and management")
+@Tag(name = "Patient > Appointments", description = "Patient appointment booking and management")
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('PATIENT')")
-public class AppointmentController {
+public class PatientAppointmentController {
     private final AppointmentService appointmentService;
     private final AvailabilityRuleService availabilityRuleService;
 
