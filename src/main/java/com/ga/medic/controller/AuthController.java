@@ -18,6 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import static com.ga.medic.config.Constants.EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES;
+
 @Tag(name = "Authentication", description = "Registration, email verification and login")
 @RestController
 @RequestMapping("/auth/users")
@@ -27,30 +29,32 @@ public class AuthController {
     private final AuthService authService;
 
     @Operation(summary = "Register a patient",
-            description = "Creates a patient account in PENDING_VERIFICATION status and emails a verification link (valid 24 hours).")
+            description = "Creates a patient account in PENDING_VERIFICATION status and emails a verification link (valid "
+                    + EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES + " minutes).")
     @PostMapping("/register/patient")
     public ResponseEntity<UserAccountResponse> registerPatient(@Valid @RequestBody UserRegistrationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerPatient(request));
     }
 
     @Operation(summary = "Register a doctor",
-            description = "Creates a doctor account in PENDING_VERIFICATION status and emails a verification link (valid 24 hours).")
+            description = "Creates a doctor account in PENDING_VERIFICATION status and emails a verification link (valid "
+                    + EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES + " minutes).")
     @PostMapping("/register/doctor")
     public ResponseEntity<UserAccountResponse> registerDoctor(@Valid @RequestBody DoctorRegistrationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerDoctor(request));
     }
 
     @Operation(summary = "Verify email",
-            description = "Activates the account using the token from the verification email.")
+            description = "Activates the account using the token from the verification email. Expired links require the user to log in to receive a new email.")
     @GetMapping("/verify")
     public ResponseEntity<String> verify(@RequestParam String token) {
         return authService.verify(token)
                 ? ResponseEntity.ok("Email successfully verified, please login.")
-                : ResponseEntity.badRequest().body("Invalid or expired link.");
+                : ResponseEntity.badRequest().body("Verification link has expired. Please log in to your account to receive a new verification email.");
     }
 
     @Operation(summary = "User Login",
-            description = "Authenticates user credentials (email and password) and returns a Bearer JWT token upon successful authentication.")
+            description = "Authenticates user credentials (email and password) and returns a Bearer JWT token upon successful authentication. Unverified users receive a new verification email and must verify it before receiving a token.")
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse response = authService.login(loginRequest);

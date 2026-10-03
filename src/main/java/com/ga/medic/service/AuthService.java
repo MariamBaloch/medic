@@ -5,6 +5,7 @@ import com.ga.medic.dto.response.LoginResponse;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.enums.RoleEnum;
 import com.ga.medic.enums.UserStatusEnum;
+import com.ga.medic.exception.EmailVerificationRequiredException;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.UserMapper;
@@ -32,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.UUID;
+
+import static com.ga.medic.config.Constants.EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES;
+import static com.ga.medic.config.Constants.PASSWORD_RESET_TOKEN_EXPIRY_MINUTES;
 
 @Service
 @RequiredArgsConstructor
@@ -103,10 +107,9 @@ public class AuthService {
 
         user.setRole(role);
         user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
-        user.setVerificationToken(UUID.randomUUID().toString());
-        user.setTokenExpiry(LocalDateTime.now().plusHours(24));
+        generateVerificationToken(user);
 //      TODO enable later, disabled to prevent spam
-//        sendVerificationEmail(user);
+        sendVerificationEmail(user);
         return user;
     }
 
@@ -115,7 +118,7 @@ public class AuthService {
         User user = userRepository.findByVerificationToken(token).orElseThrow(() ->
                 new InformationNotFoundException("Invalid verification token"));
 
-        if (user.getTokenExpiry().isBefore(LocalDateTime.now())) return false;
+        if (user.getTokenExpiry() == null || !user.getTokenExpiry().isAfter(LocalDateTime.now())) return false;
 
         user.setStatus(UserStatusEnum.ACTIVE);
         user.setVerificationToken(null);
@@ -128,9 +131,14 @@ public class AuthService {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setTo(user.getEmail());
         msg.setSubject("Verify your email");
-        msg.setText("Click to verify: http://localhost:8080/auth/users/verify?token="
-                + user.getVerificationToken());
+        msg.setText("Click to verify: http://localhost:8080/auth/users/verify?token=" + user.getVerificationToken()
+                + " \n\nThe token expires in " + EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES + " minutes.");
         mailSender.send(msg);
+    }
+
+    private void generateVerificationToken(User user) {
+        user.setVerificationToken(UUID.randomUUID().toString());
+        user.setTokenExpiry(LocalDateTime.now().plusMinutes(EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES));
     }
 
     public LoginResponse login(LoginRequest loginRequest) {
@@ -139,6 +147,18 @@ public class AuthService {
 
         if (!passwordEncoder.matches(loginRequest.password(), user.getPassword())) {
             throw new BadCredentialsException("Password is incorrect");
+        }
+
+        if (user.getStatus() == UserStatusEnum.PENDING_VERIFICATION) {
+            if (user.getVerificationToken() != null && user.getTokenExpiry() != null && user.getTokenExpiry().isAfter(LocalDateTime.now())) {
+                throw new EmailVerificationRequiredException("Email verification is required. Please use the verification email already sent.");
+            }
+
+            generateVerificationToken(user);
+            userRepository.save(user);
+            sendVerificationEmail(user);
+            throw new EmailVerificationRequiredException("Email verification is required. A new verification email has been sent. The token expires in "
+                    + EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES + " minutes.");
         }
 
         Authentication authentication = authenticationManager.authenticate(
@@ -159,7 +179,7 @@ public class AuthService {
 
         String resetToken = UUID.randomUUID().toString();
         user.setResetPasswordToken(resetToken);
-        user.setResetPasswordTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        user.setResetPasswordTokenExpiry(LocalDateTime.now().plusMinutes(PASSWORD_RESET_TOKEN_EXPIRY_MINUTES));
 
         userRepository.save(user);
 
@@ -200,7 +220,7 @@ public class AuthService {
         msg.setText("Your password reset token is:\n\n"
                 + token + "\n\n"
                 + "Use this token to reset your password by sending a POST request to /auth/users/reset-password with your token and new password.\n\n"
-                + "This token will expire in 15 minutes.");
+                + "This token will expire in " + PASSWORD_RESET_TOKEN_EXPIRY_MINUTES + " minutes.");
         mailSender.send(msg);
     }
 
