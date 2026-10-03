@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
+import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
@@ -43,12 +44,22 @@ public class AppointmentService {
     private final PageMapper pageMapper;
 
     @Transactional
-    public PageResponse<AppointmentResponse> getMyAppointments(Pageable pageable) {
+    public PageResponse<AppointmentResponse> getPatientAppointments(Long doctorId, AppointmentFilterRequest filters,
+                                                                     Pageable pageable) {
         PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
-        Page<Appointment> appointments = appointmentRepository.findByPatientId(patient.getId(), pageable);
+        Page<Appointment> appointments = appointmentRepository.findByPatientIdWithFilters(
+                patient.getId(), doctorId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
     }
 
+    @Transactional
+    public PageResponse<AppointmentResponse> getDoctorAppointments(Long patientId, AppointmentFilterRequest filters,
+                                                                    Pageable pageable) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Page<Appointment> appointments = appointmentRepository.findByDoctorIdWithFilters(
+                doctor.getId(), patientId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
+        return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+    }
 
     /**
      * Books an appointment for the currently authenticated patient with the specified doctor and time slot.

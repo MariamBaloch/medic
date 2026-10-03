@@ -1,6 +1,7 @@
 package com.ga.medic.controller;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
@@ -37,9 +38,13 @@ public class PatientAppointmentController {
     private final AvailabilityRuleService availabilityRuleService;
 
     @GetMapping
-    @Operation(summary = "Get my appointments", description = "List appointments for the authenticated patient with pagination and sorting")
-    public ResponseEntity<PageResponse<AppointmentResponse>> getMyAppointments(@ParameterObject @PageableDefault(sort = {"appointmentDate", "startTime"}, direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(appointmentService.getMyAppointments(pageable));
+    @Operation(summary = "Get my appointments",
+            description = "Lists the authenticated patient's appointments with optional doctor, date-range, and status filters.")
+    public ResponseEntity<PageResponse<AppointmentResponse>> getMyAppointments(
+            @Parameter(description = "Doctor profile ID") @RequestParam(required = false) Long doctorId,
+            @ParameterObject AppointmentFilterRequest filters,
+            @ParameterObject @PageableDefault(sort = {"appointmentDate", "startTime"}, direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(appointmentService.getPatientAppointments(doctorId, filters, pageable));
     }
 
     @PostMapping
