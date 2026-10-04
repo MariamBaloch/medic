@@ -15,7 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/user")
 @Tag(name = "User", description = "User account management")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("isAuthenticated()")
