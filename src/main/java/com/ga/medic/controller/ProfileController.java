@@ -1,9 +1,12 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.DoctorProfileRequest;
 import com.ga.medic.dto.request.PatientProfileRequest;
 import com.ga.medic.dto.response.DoctorProfileResponse;
 import com.ga.medic.dto.response.PatientProfileResponse;
+import com.ga.medic.enums.AuditAction;
+import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.ProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,6 +32,7 @@ public class ProfileController {
             description = "Updates patient profile fields if provided")
     @PatchMapping("/patient")
     @PreAuthorize("hasRole('PATIENT')")
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.PROFILE, description = "Patient updated their profile")
     public ResponseEntity<PatientProfileResponse> updatePatientProfile(@RequestBody PatientProfileRequest request) {
         return ResponseEntity.ok().body(profileService.updatePatientProfile(request));
     }
@@ -37,6 +41,7 @@ public class ProfileController {
             description = "Updates doctor profile fields if provided")
     @PatchMapping("/doctor")
     @PreAuthorize("hasRole('DOCTOR')")
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.PROFILE, description = "Doctor updated their profile")
     public ResponseEntity<DoctorProfileResponse> updateDoctorProfile(@RequestBody DoctorProfileRequest request) {
         return ResponseEntity.ok().body(profileService.updateDoctorProfile(request));
     }
