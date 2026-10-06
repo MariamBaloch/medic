@@ -22,10 +22,13 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
 import java.util.List;
+
+import static com.ga.medic.specification.AppointmentSpecifications.*;
 
 @Service
 @RequiredArgsConstructor
@@ -47,8 +50,15 @@ public class AppointmentService {
     public PageResponse<AppointmentResponse> getPatientAppointments(Long doctorId, AppointmentFilterRequest filters,
                                                                     Pageable pageable) {
         PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
-        Page<Appointment> appointments = appointmentRepository.findByPatientIdWithFilters(
-                patient.getId(), doctorId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
+
+        Specification<Appointment> spec = Specification
+                .where(forPatient(patient.getId()))
+                .and(withOptionalDoctor(doctorId))
+                .and(fromDate(filters.getDateFrom()))
+                .and(toDate(filters.getDateTo()))
+                .and(withStatus(filters.getStatus()));
+
+        Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
     }
 
@@ -56,8 +66,14 @@ public class AppointmentService {
     public PageResponse<AppointmentResponse> getDoctorAppointments(Long patientId, AppointmentFilterRequest filters,
                                                                    Pageable pageable) {
         DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
-        Page<Appointment> appointments = appointmentRepository.findByDoctorIdWithFilters(
-                doctor.getId(), patientId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
+        Specification<Appointment> spec = Specification
+                .where(forDoctor(doctor.getId()))
+                .and(withOptionalPatient(patientId))
+                .and(fromDate(filters.getDateFrom()))
+                .and(toDate(filters.getDateTo()))
+                .and(withStatus(filters.getStatus()));
+
+        Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
     }
 
@@ -106,7 +122,7 @@ public class AppointmentService {
         notificationRepository.save(notification);
         NotificationResponse notificationResponse = notificationMapper.toResponse(notification);
         notificationService.sendNotification(doctor.getUser().getId(), notificationResponse);
-        
+
         return appointmentMapper.toResponse(appointment);
     }
 
