@@ -1,8 +1,11 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AvailabilityExceptionRequest;
 import com.ga.medic.dto.response.AvailabilityExceptionDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityExceptionResponse;
+import com.ga.medic.enums.AuditAction;
+import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.AvailabilityExceptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,6 +32,7 @@ public class DoctorAvailabilityExceptionController {
     @Operation(summary = "Create availability exception",
             description = "Block a whole day or a time window. Existing appointments are kept but counted in the response.")
     @PostMapping
+    @AuditLogger(action = AuditAction.CREATE, entityType = AuditEntityType.AVAILABILITY_EXCEPTION, description = "Doctor created an availability exception")
     public ResponseEntity<AvailabilityExceptionResponse> createException(@Valid @RequestBody AvailabilityExceptionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(availabilityExceptionService.createException(request));
     }
@@ -43,6 +47,7 @@ public class DoctorAvailabilityExceptionController {
     @PutMapping("/{id}")
     @Operation(summary = "Update availability exception",
             description = "Updates an existing availability exception and returns any existing appointments affected by the new exception.")
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.AVAILABILITY_EXCEPTION, description = "Doctor updated an availability exception")
     public ResponseEntity<AvailabilityExceptionResponse> updateException(@PathVariable Long id, @Valid @RequestBody AvailabilityExceptionRequest request) {
         return ResponseEntity.ok(availabilityExceptionService.updateException(id, request));
     }
@@ -50,6 +55,7 @@ public class DoctorAvailabilityExceptionController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete availability exception",
             description = "Deletes an availability exception and returns any existing appointments affected by the deletion.")
+    @AuditLogger(action = AuditAction.DELETE, entityType = AuditEntityType.AVAILABILITY_EXCEPTION, description = "Doctor deleted an availability exception")
     public ResponseEntity<AvailabilityExceptionDeleteResponse> deleteException(@PathVariable Long id) {
         return ResponseEntity.ok(availabilityExceptionService.deleteException(id));
     }
