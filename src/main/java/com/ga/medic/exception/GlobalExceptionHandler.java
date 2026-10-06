@@ -13,9 +13,12 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -90,6 +93,31 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex, HttpServletRequest request) {
         log.warn("Authorization denied for {}", request.getRequestURI());
         return build(HttpStatus.FORBIDDEN, "You do not have permission to perform this action", request, null);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestParameter(MissingServletRequestParameterException ex, HttpServletRequest request) {
+        log.warn("Missing request parameter '{}' on {}", ex.getParameterName(), request.getRequestURI());
+
+        String message = "Required parameter '" + ex.getParameterName() + "' is missing";
+
+        return build(HttpStatus.BAD_REQUEST, message, request, null);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        log.warn("Invalid request parameter '{}' on {}", ex.getName(), request.getRequestURI());
+
+        String message;
+
+        if (ex.getRequiredType() == LocalDate.class) {
+            message = "Invalid value for parameter '" + ex.getName()
+                    + "'. Expected format: dd/MM/yyyy";
+        } else {
+            message = "Invalid value for parameter '" + ex.getName() + "'";
+        }
+
+        return build(HttpStatus.BAD_REQUEST, message, request, null);
     }
 
     @ExceptionHandler(Exception.class)
