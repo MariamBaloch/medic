@@ -1,5 +1,6 @@
 package com.ga.medic.model;
 
+import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -18,6 +19,10 @@ public class Notification extends Auditable {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NotificationType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private NotificationAction action;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     private User user;
