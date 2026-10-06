@@ -1,25 +1,22 @@
 package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
-import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
+import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
+import com.ga.medic.dto.response.NotificationResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.enums.NotificationType;
 import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
+import com.ga.medic.mapper.NotificationMapper;
 import com.ga.medic.mapper.PageMapper;
-import com.ga.medic.model.Appointment;
-import com.ga.medic.model.AvailabilityRule;
-import com.ga.medic.model.DoctorProfile;
-import com.ga.medic.model.PatientProfile;
-import com.ga.medic.repository.AppointmentRepository;
-import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
-import com.ga.medic.repository.PatientProfileRepository;
+import com.ga.medic.model.*;
+import com.ga.medic.repository.*;
 import com.ga.medic.security.AuthenticatedUser;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,10 +39,13 @@ public class AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final AuthenticatedUser authenticatedUser;
     private final PageMapper pageMapper;
+    private final NotificationService notificationService;
+    private final NotificationRepository notificationRepository;
+    private final NotificationMapper notificationMapper;
 
     @Transactional
     public PageResponse<AppointmentResponse> getPatientAppointments(Long doctorId, AppointmentFilterRequest filters,
-                                                                     Pageable pageable) {
+                                                                    Pageable pageable) {
         PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
         Page<Appointment> appointments = appointmentRepository.findByPatientIdWithFilters(
                 patient.getId(), doctorId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
@@ -54,7 +54,7 @@ public class AppointmentService {
 
     @Transactional
     public PageResponse<AppointmentResponse> getDoctorAppointments(Long patientId, AppointmentFilterRequest filters,
-                                                                    Pageable pageable) {
+                                                                   Pageable pageable) {
         DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
         Page<Appointment> appointments = appointmentRepository.findByDoctorIdWithFilters(
                 doctor.getId(), patientId, filters.getDateFrom(), filters.getDateTo(), filters.getStatus(), pageable);
@@ -94,6 +94,19 @@ public class AppointmentService {
 
         Appointment appointment = appointmentMapper.toEntity(request, doctor, patient, rule, endTime);
         appointment = appointmentRepository.save(appointment);
+
+        Notification notification = notificationMapper
+                .toNotification(doctor.getUser(),
+                        "New Appointment Booking",
+                        "You have a new appointment booking at " + request.date() + " from " + request.startTime() + " to " + endTime + " with doctor " + doctor.getUser().getFullName() + ".",
+                        appointment.getId(),
+                        NotificationType.APPOINTMENT,
+                        false);
+
+        notificationRepository.save(notification);
+        NotificationResponse notificationResponse = notificationMapper.toResponse(notification);
+        notificationService.sendNotification(doctor.getUser().getId(), notificationResponse);
+        
         return appointmentMapper.toResponse(appointment);
     }
 
