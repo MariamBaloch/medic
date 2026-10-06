@@ -1,6 +1,13 @@
 package com.ga.medic.service;
 
 import com.ga.medic.dto.response.NotificationResponse;
+import com.ga.medic.enums.NotificationAction;
+import com.ga.medic.enums.NotificationType;
+import com.ga.medic.mapper.NotificationMapper;
+import com.ga.medic.model.Notification;
+import com.ga.medic.model.User;
+import com.ga.medic.repository.NotificationRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -12,8 +19,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class NotificationService {
 
+    private final NotificationMapper notificationMapper;
+    private final NotificationRepository notificationRepository;
     // Map to hold userId and all active SseEmitters for that user for multiple connections
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
@@ -62,5 +72,13 @@ public class NotificationService {
                 emitters.remove(userId);
             }
         }
+    }
+
+    public void createAndSend(User user, NotificationType type, NotificationAction action, String title, String message, boolean read, Long relatedEntityId
+    ) {
+        Notification notification = notificationMapper.toNotification(user, type, action, title, message, read, relatedEntityId);
+        notificationRepository.save(notification);
+        NotificationResponse response = notificationMapper.toResponse(notification);
+        sendNotification(user.getId(), response);
     }
 }
