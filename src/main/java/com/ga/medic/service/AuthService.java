@@ -57,7 +57,7 @@ public class AuthService {
 
     @Transactional
     public UserAccountResponse registerPatient(UserRegistrationRequest request) {
-        User user = createUser(request, RoleEnum.PATIENT);
+        User user = createUser(request, RoleEnum.PATIENT, true);
 
         PatientProfile profile = new PatientProfile();
         profile.setUser(user);
@@ -69,7 +69,7 @@ public class AuthService {
 
     @Transactional
     public UserAccountResponse registerDoctor(DoctorRegistrationRequest request) {
-        User user = createUser(request, RoleEnum.DOCTOR);
+        User user = createUser(request, RoleEnum.DOCTOR, true);
 
         Specialization specialization = specializationRepository
                 .findById(request.getSpecializationId())
@@ -91,7 +91,13 @@ public class AuthService {
         return userMapper.toResponse(newUser);
     }
 
-    private User createUser(UserRegistrationRequest request, RoleEnum roleEnum) {
+    @Transactional
+    public UserAccountResponse registerAdmin(UserRegistrationRequest request) {
+        User user = createUser(request, RoleEnum.ADMIN, false);
+        return userMapper.toResponse(userRepository.save(user));
+    }
+
+    private User createUser(UserRegistrationRequest request, RoleEnum roleEnum, boolean requiresEmailVerification) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new InformationExistsException(
                     "User with email address " + request.getEmail() + " already exists");
@@ -106,10 +112,14 @@ public class AuthService {
                         new InformationNotFoundException(roleEnum + " role not found"));
 
         user.setRole(role);
-        user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
-        generateVerificationToken(user);
-//      TODO enable later, disabled to prevent spam
-        sendVerificationEmail(user);
+        if (requiresEmailVerification) {
+            user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
+            generateVerificationToken(user);
+//          TODO enable later, disabled to prevent spam
+            sendVerificationEmail(user);
+        } else {
+            user.setStatus(UserStatusEnum.ACTIVE);
+        }
         return user;
     }
 

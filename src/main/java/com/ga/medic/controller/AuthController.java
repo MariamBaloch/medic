@@ -44,6 +44,14 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerDoctor(request));
     }
 
+    @Operation(summary = "Register an admin",
+            description = "Creates an active admin account without email verification or a profile. Only existing admins may register another admin.")
+    @PostMapping("/register/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserAccountResponse> registerAdmin(@Valid @RequestBody UserRegistrationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerAdmin(request));
+    }
+
     @Operation(summary = "Verify email",
             description = "Activates the account using the token from the verification email. Expired links require the user to log in to receive a new email.")
     @GetMapping("/verify")
