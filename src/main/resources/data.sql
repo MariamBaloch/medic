@@ -1,3 +1,12 @@
-INSERT INTO roles (name) VALUES ('PATIENT') ON CONFLICT DO NOTHING;
-INSERT INTO roles (name) VALUES ('DOCTOR') ON CONFLICT DO NOTHING;
-INSERT INTO specializations (name, description) VALUES ('Dermatology', 'Skin') ON CONFLICT DO NOTHING;
+INSERT INTO roles (name)
+VALUES ('PATIENT')
+ON CONFLICT DO NOTHING;
+INSERT INTO roles (name)
+VALUES ('DOCTOR')
+ON CONFLICT DO NOTHING;
+INSERT INTO roles (name)
+VALUES ('ADMIN')
+ON CONFLICT DO NOTHING;
+INSERT INTO specializations (name, description)
+VALUES ('Dermatology', 'Skin')
+ON CONFLICT DO NOTHING;
