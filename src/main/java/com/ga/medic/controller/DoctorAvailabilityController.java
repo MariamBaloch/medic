@@ -1,11 +1,14 @@
 package com.ga.medic.controller;
 
 
+import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityRuleResponse;
 import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
 import com.ga.medic.dto.response.DoctorCalendarResponse;
+import com.ga.medic.enums.AuditAction;
+import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.AvailabilityRuleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -42,6 +45,7 @@ public class DoctorAvailabilityController {
     @Operation(summary = "Create availability rule",
             description = "Create a new availability rule defining the doctor's working schedule")
     @PostMapping("/rules")
+    @AuditLogger(action = AuditAction.CREATE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor created an availability rule")
     public ResponseEntity<AvailabilityRuleUpdateResponse> createRule(@Valid @RequestBody AvailabilityRuleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(availabilityRuleService.createRule(request));
     }
@@ -49,6 +53,7 @@ public class DoctorAvailabilityController {
     @Operation(summary = "Update availability rule",
             description = "Update an existing availability rule. If the rule has already started, the old rule is closed and a new one is created.")
     @PutMapping("/rules/{id}")
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor updated an availability rule")
     public ResponseEntity<AvailabilityRuleUpdateResponse> updateRule(@PathVariable Long id, @Valid @RequestBody AvailabilityRuleRequest request) {
         return ResponseEntity.ok(availabilityRuleService.updateRule(id, request));
     }
@@ -56,6 +61,7 @@ public class DoctorAvailabilityController {
     @Operation(summary = "Delete availability rule",
             description = "Delete a rule. Hard-deletes rules that haven't started, soft-deletes (sets endDate to yesterday) active rules.")
     @DeleteMapping("/rules/{id}")
+    @AuditLogger(action = AuditAction.DELETE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor deleted an availability rule")
     public ResponseEntity<AvailabilityRuleDeleteResponse> deleteRule(@PathVariable Long id) {
         return ResponseEntity.ok(availabilityRuleService.deleteRule(id));
     }

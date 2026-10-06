@@ -1,11 +1,14 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.enums.AuditAction;
+import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.AppointmentService;
 import com.ga.medic.service.AvailabilityRuleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,6 +53,7 @@ public class PatientAppointmentController {
     @PostMapping
     @Operation(summary = "Book an appointment",
             description = "Book an appointment with a doctor. The system validates the slot is truly available against current rules and prevents double-booking.")
+    @AuditLogger(action = AuditAction.BOOK, entityType = AuditEntityType.APPOINTMENT, description = "Patient booked an appointment")
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentBookingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.bookAppointment(request));
     }
@@ -57,6 +61,7 @@ public class PatientAppointmentController {
     @Operation(summary = "Cancel an appointment",
             description = "Cancel an appointment. The freed slot reappears automatically if the current rules still produce it.")
     @PutMapping("/appointments/{id}/cancel")
+    @AuditLogger(action = AuditAction.CANCEL, entityType = AuditEntityType.APPOINTMENT, description = "Patient cancelled an appointment")
     public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable Long id, @Valid @RequestBody CancelAppointmentRequest request) {
         return ResponseEntity.ok(appointmentService.cancelAppointment(id, request));
     }
