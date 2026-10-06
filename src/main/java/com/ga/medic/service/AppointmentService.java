@@ -8,6 +8,7 @@ import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.NotificationResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
 import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
@@ -112,12 +113,18 @@ public class AppointmentService {
         appointment = appointmentRepository.save(appointment);
 
         Notification notification = notificationMapper
-                .toNotification(doctor.getUser(),
-                        "New Appointment Booking",
-                        "You have a new appointment booking at " + request.date() + " from " + request.startTime() + " to " + endTime + " with doctor " + doctor.getUser().getFullName() + ".",
-                        appointment.getId(),
+                .toNotification(
+                        doctor.getUser(),
                         NotificationType.APPOINTMENT,
-                        false);
+                        NotificationAction.BOOKED,
+                        "New Appointment Booking",
+                        "You have a new appointment booking from " + patient.getUser().getFullName()
+                                + " on " + request.date()
+                                + " from " + request.startTime()
+                                + " to " + endTime + ".",
+                        false,
+                        appointment.getId()
+                );
 
         notificationRepository.save(notification);
         NotificationResponse notificationResponse = notificationMapper.toResponse(notification);
