@@ -46,6 +46,6 @@ public class UserRegistrationRequest {
     @Pattern(regexp = Constants.PHONE_REGEX, message = "Phone must contain only digits, with an optional leading +")
     public String phone;
 
-    @Schema(description = "Gender")
+    @Schema(description = "Gender", example = "FEMALE")
     public GenderEnum gender;
 }
