@@ -48,4 +48,12 @@ public class ProfileService {
         doctorProfileMapper.updateDoctorProfile(request, profile);
         return doctorProfileMapper.toDoctorProfileResponse(profile);
     }
+
+    @Transactional
+    public void verifyDoctor(Long doctorProfileId) {
+        DoctorProfile profile = doctorProfileRepository.findById(doctorProfileId)
+                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
+
+        profile.setIsVerified(true);
+    }
 }
