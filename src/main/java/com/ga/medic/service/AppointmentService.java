@@ -5,7 +5,6 @@ import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
-import com.ga.medic.dto.response.NotificationResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.NotificationAction;
@@ -16,7 +15,10 @@ import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.NotificationMapper;
 import com.ga.medic.mapper.PageMapper;
-import com.ga.medic.model.*;
+import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AvailabilityRule;
+import com.ga.medic.model.DoctorProfile;
+import com.ga.medic.model.PatientProfile;
 import com.ga.medic.repository.*;
 import com.ga.medic.security.AuthenticatedUser;
 import jakarta.transaction.Transactional;
@@ -112,23 +114,14 @@ public class AppointmentService {
         Appointment appointment = appointmentMapper.toEntity(request, doctor, patient, rule, endTime);
         appointment = appointmentRepository.save(appointment);
 
-        Notification notification = notificationMapper
-                .toNotification(
-                        doctor.getUser(),
-                        NotificationType.APPOINTMENT,
-                        NotificationAction.BOOKED,
-                        "New Appointment Booking",
-                        "You have a new appointment booking from " + patient.getUser().getFullName()
-                                + " on " + request.date()
-                                + " from " + request.startTime()
-                                + " to " + endTime + ".",
-                        false,
-                        appointment.getId()
-                );
-
-        notificationRepository.save(notification);
-        NotificationResponse notificationResponse = notificationMapper.toResponse(notification);
-        notificationService.sendNotification(doctor.getUser().getId(), notificationResponse);
+        notificationService.createAndSend(doctor.getUser(), NotificationType.APPOINTMENT, NotificationAction.BOOKED,
+                "New Appointment Booking",
+                "You have a new appointment booking from " + patient.getUser().getFullName()
+                        + " on " + request.date()
+                        + " from " + request.startTime()
+                        + " to " + endTime + ".",
+                false, appointment.getId()
+        );
 
         return appointmentMapper.toResponse(appointment);
     }
@@ -157,6 +150,18 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatusEnum.CANCELLED);
         appointment.setCancelledReason(request.reason());
         appointment = appointmentRepository.save(appointment);
+
+        notificationService.createAndSend(
+                appointment.getDoctor().getUser(),
+                NotificationType.APPOINTMENT,
+                NotificationAction.CANCELLED,
+                "Appointment Cancelled",
+                "Appointment cancelled by " + authenticatedUser.get().user().getFullName()
+                        + " for " + appointment.getAppointmentDate()
+                        + " at " + appointment.getStartTime() + ".",
+                false,
+                appointment.getId()
+        );
 
         return appointmentMapper.toResponse(appointment);
     }
