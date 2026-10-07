@@ -205,7 +205,7 @@ Follow these steps to run the application locally:
 
 ## Major Challenges
 
-- **Availability Engine:** Calculating precise 15-minute appointment slots based on dynamic weekly schedules while
+- **Availability Engine:** Calculating precise 15/30-minute appointment slots based on dynamic weekly schedules while
   excluding specific date/time exceptions and already booked appointments proved mathematically and logically
   challenging.
 
