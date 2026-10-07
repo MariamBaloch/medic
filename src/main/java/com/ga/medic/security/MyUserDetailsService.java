@@ -1,5 +1,6 @@
 package com.ga.medic.security;
 
+import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.model.User;
 import com.ga.medic.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,10 @@ public class MyUserDetailsService implements UserDetailsService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User with email " + email + " not found"));
+
+        if (user.getStatus() == UserStatusEnum.DELETED || user.getDeletedAt() != null) {
+            throw new UsernameNotFoundException("User with email " + email + " not found");
+        }
 
         return new MyUserDetails(user);
     }

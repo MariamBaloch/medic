@@ -30,7 +30,7 @@ public record MyUserDetails(User user) implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.getStatus().equals(UserStatusEnum.ACTIVE);
+        return user.getStatus() == UserStatusEnum.ACTIVE && user.getDeletedAt() == null;
     }
 
     @Override

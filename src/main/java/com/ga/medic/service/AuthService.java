@@ -203,6 +203,10 @@ public class AuthService {
         User user = userRepository.findByEmail(loginRequest.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
+        if (user.getStatus() == UserStatusEnum.DELETED || user.getDeletedAt() != null) {
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
         if (!passwordEncoder.matches(loginRequest.password(), user.getPassword())) {
             throw new BadCredentialsException("Password is incorrect");
         }

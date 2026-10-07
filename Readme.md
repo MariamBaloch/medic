@@ -138,6 +138,7 @@ running.
 | DELETE       | `/doctors/availability/exceptions/{id}`           | Delete availability exception      | Doctor        |
 | GET          | `/notifications/subscribe`                        | Connect to real-time notifications | Authenticated |
 | PATCH        | `/admin/doctors/{id}/verify`                      | Verify a doctor profile            | Admin         |
+| DELETE       | `/admin/users/{userId}`                           | Soft delete a user                 | Admin         |
 | GET          | `/audit-logs`                                     | Get all audit logs                 | Authenticated |
 
 ## Installation
@@ -192,9 +193,6 @@ Follow these steps to run the application locally:
 
 ## Future Improvements
 
-- **Soft Delete Implementation:** Fully implement soft deletes across major entities. This will include adding an admin
-  endpoint (`DELETE /admin/users/{id}`) to deactivate users (setting status to `INACTIVE` and updating `deletedAt`),
-  enforcing that inactive users cannot log in.
 - **Integration Testing:** Expand test coverage by using the dedicated `test` profile (with the configured in-memory H2
   database) for comprehensive integration testing, rather than relying solely on mocked unit tests.
 - **Redis Caching for Availability:** Optimize performance by caching the results of `computeAvailableSlots` in Redis.

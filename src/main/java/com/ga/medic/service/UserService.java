@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.config.Constants;
 import com.ga.medic.dto.response.UserAccountResponse;
+import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.UserMapper;
 import com.ga.medic.model.User;
@@ -11,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -66,5 +69,25 @@ public class UserService {
                 .findById(userId)
                 .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
         return userMapper.toResponse(user);
+    }
+
+    /**
+     * Marks a user as deleted while retaining the account and its related records.
+     *
+     * @param userId the ID of the account to soft delete
+     */
+    @Transactional
+    public void softDeleteUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+
+        user.setStatus(UserStatusEnum.DELETED);
+        if (user.getDeletedAt() == null) {
+            user.setDeletedAt(Instant.now());
+        }
+        user.setVerificationToken(null);
+        user.setTokenExpiry(null);
+        user.setResetPasswordToken(null);
+        user.setResetPasswordTokenExpiry(null);
     }
 }
