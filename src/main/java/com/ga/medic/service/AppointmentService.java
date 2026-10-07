@@ -13,13 +13,14 @@ import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
-import com.ga.medic.mapper.NotificationMapper;
 import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.model.PatientProfile;
-import com.ga.medic.repository.*;
+import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AvailabilityRuleRepository;
+import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -38,22 +39,18 @@ import static com.ga.medic.specification.AppointmentSpecifications.*;
 public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final DoctorProfileRepository doctorProfileRepository;
-    private final PatientProfileRepository patientProfileRepository;
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
-    private final AvailabilityExceptionService availabilityExceptionService;
     private final AppointmentMapper appointmentMapper;
     private final AuthenticatedUser authenticatedUser;
     private final PageMapper pageMapper;
     private final NotificationService notificationService;
-    private final NotificationRepository notificationRepository;
-    private final NotificationMapper notificationMapper;
 
     /**
      * Returns the authenticated patient's appointments with optional filters and pagination.
      *
      * @param doctorId optional doctor ID to filter by
-     * @param filters optional date and status filters
+     * @param filters  optional date and status filters
      * @param pageable pagination and sorting information
      * @return the requested page of appointment responses
      */
@@ -77,8 +74,8 @@ public class AppointmentService {
      * Returns the authenticated doctor's appointments with optional filters and pagination.
      *
      * @param patientId optional patient ID to filter by
-     * @param filters optional date and status filters
-     * @param pageable pagination and sorting information
+     * @param filters   optional date and status filters
+     * @param pageable  pagination and sorting information
      * @return the requested page of appointment responses
      */
     @Transactional
@@ -148,7 +145,7 @@ public class AppointmentService {
      * Cancels an eligible appointment belonging to the authenticated patient and notifies the doctor.
      *
      * @param appointmentId the ID of the appointment to cancel
-     * @param request the cancellation reason
+     * @param request       the cancellation reason
      * @return the updated appointment details
      */
     @Transactional
@@ -193,7 +190,7 @@ public class AppointmentService {
      * Updates a booked appointment owned by the authenticated doctor to a completed outcome.
      *
      * @param appointmentId the appointment to update
-     * @param status the outcome, either COMPLETED or NO_SHOW
+     * @param status        the outcome, either COMPLETED or NO_SHOW
      * @return the updated appointment details
      */
     @Transactional
