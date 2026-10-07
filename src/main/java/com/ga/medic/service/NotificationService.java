@@ -27,6 +27,12 @@ public class NotificationService {
     // Map to hold userId and all active SseEmitters for that user for multiple connections
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
+    /**
+     * Opens a server-sent-events connection and tracks it for the user's live notifications.
+     *
+     * @param userId the ID of the user subscribing to notifications
+     * @return the event stream connected to the user
+     */
     public SseEmitter subscribe(Long userId) {
         SseEmitter emitter = new SseEmitter(0L);
 
@@ -44,6 +50,12 @@ public class NotificationService {
         return emitter;
     }
 
+    /**
+     * Sends a notification to every active event-stream connection for the user.
+     *
+     * @param userId the ID of the notification recipient
+     * @param notification the notification to send
+     */
     public void sendNotification(Long userId, NotificationResponse notification) {
         Set<SseEmitter> userEmitters = emitters.get(userId);
         log.info("Sending notification to userId {}: {}", userId, notification);
@@ -62,6 +74,12 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Removes a closed event stream and drops the user's entry when no streams remain.
+     *
+     * @param userId the ID of the stream's user
+     * @param emitter the event stream to remove
+     */
     private void removeEmitter(Long userId, SseEmitter emitter) {
         Set<SseEmitter> userEmitters = emitters.get(userId);
 
@@ -74,6 +92,17 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Persists a notification before delivering it to the user's active event-stream connections.
+     *
+     * @param user the notification recipient
+     * @param type the notification category
+     * @param action the action associated with the notification
+     * @param title the notification title
+     * @param message the notification body
+     * @param read whether the notification is initially marked as read
+     * @param relatedEntityId the ID of the related entity, if any
+     */
     public void createAndSend(User user, NotificationType type, NotificationAction action, String title, String message, boolean read, Long relatedEntityId
     ) {
         Notification notification = notificationMapper.toNotification(user, type, action, title, message, read, relatedEntityId);

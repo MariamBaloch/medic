@@ -49,6 +49,14 @@ public class AppointmentService {
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
 
+    /**
+     * Returns the authenticated patient's appointments with optional filters and pagination.
+     *
+     * @param doctorId optional doctor ID to filter by
+     * @param filters optional date and status filters
+     * @param pageable pagination and sorting information
+     * @return the requested page of appointment responses
+     */
     @Transactional
     public PageResponse<AppointmentResponse> getPatientAppointments(Long doctorId, AppointmentFilterRequest filters,
                                                                     Pageable pageable) {
@@ -65,6 +73,14 @@ public class AppointmentService {
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
     }
 
+    /**
+     * Returns the authenticated doctor's appointments with optional filters and pagination.
+     *
+     * @param patientId optional patient ID to filter by
+     * @param filters optional date and status filters
+     * @param pageable pagination and sorting information
+     * @return the requested page of appointment responses
+     */
     @Transactional
     public PageResponse<AppointmentResponse> getDoctorAppointments(Long patientId, AppointmentFilterRequest filters,
                                                                    Pageable pageable) {
@@ -81,8 +97,10 @@ public class AppointmentService {
     }
 
     /**
-     * Books an appointment for the currently authenticated patient with the specified doctor and time slot.
-     * Validates whether the requested slot is available and doesn't overlap with any existing appointments.
+     * Books an appointment for the authenticated patient after validating the doctor's slot and patient conflicts.
+     *
+     * @param request the doctor, date, and start time for the requested appointment
+     * @return the saved appointment details
      */
     @Transactional
     public AppointmentResponse bookAppointment(AppointmentBookingRequest request) {
@@ -127,7 +145,11 @@ public class AppointmentService {
     }
 
     /**
-     * Cancels an appointment belonging to the authenticated patient.
+     * Cancels an eligible appointment belonging to the authenticated patient and notifies the doctor.
+     *
+     * @param appointmentId the ID of the appointment to cancel
+     * @param request the cancellation reason
+     * @return the updated appointment details
      */
     @Transactional
     public AppointmentResponse cancelAppointment(Long appointmentId, CancelAppointmentRequest request) {

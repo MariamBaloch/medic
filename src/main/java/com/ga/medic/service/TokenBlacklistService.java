@@ -13,6 +13,12 @@ public class TokenBlacklistService {
 
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * Stores the token ID in Redis only for the token's remaining lifetime.
+     *
+     * @param jti the JWT ID to blacklist
+     * @param expiresAt the token's expiration time
+     */
     public void blacklist(String jti, Date expiresAt) {
         long remainingMs = expiresAt.getTime() - System.currentTimeMillis();
         if (remainingMs > 0) {
@@ -20,6 +26,12 @@ public class TokenBlacklistService {
         }
     }
 
+    /**
+     * Checks whether Redis contains the given token ID in the blacklist.
+     *
+     * @param jti the JWT ID to check
+     * @return true if the token ID is blacklisted, otherwise false
+     */
     public boolean isBlacklisted(String jti) {
         return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + jti));
     }

@@ -55,6 +55,12 @@ public class AuthService {
     private final AuthenticatedUser authenticatedUser;
     private final TokenBlacklistService tokenBlacklistService;
 
+    /**
+     * Registers a patient account and creates its patient profile.
+     *
+     * @param request the registration details
+     * @return the created user account details
+     */
     @Transactional
     public UserAccountResponse registerPatient(UserRegistrationRequest request) {
         User user = createUser(request, RoleEnum.PATIENT, true);
@@ -67,6 +73,12 @@ public class AuthService {
         return userMapper.toResponse(newUser);
     }
 
+    /**
+     * Registers a doctor with a specialization and a license number that is not already in use.
+     *
+     * @param request the doctor registration details
+     * @return the created user account details
+     */
     @Transactional
     public UserAccountResponse registerDoctor(DoctorRegistrationRequest request) {
         User user = createUser(request, RoleEnum.DOCTOR, true);
@@ -91,12 +103,26 @@ public class AuthService {
         return userMapper.toResponse(newUser);
     }
 
+    /**
+     * Registers an active administrator account without requiring email verification.
+     *
+     * @param request the administrator registration details
+     * @return the created user account details
+     */
     @Transactional
     public UserAccountResponse registerAdmin(UserRegistrationRequest request) {
         User user = createUser(request, RoleEnum.ADMIN, false);
         return userMapper.toResponse(userRepository.save(user));
     }
 
+    /**
+     * Builds a user with an encoded password and applies the role-specific activation and verification state.
+     *
+     * @param request the registration details used to build the account
+     * @param roleEnum the role assigned to the account
+     * @param requiresEmailVerification whether the account must verify its email before activation
+     * @return the initialized user entity
+     */
     private User createUser(UserRegistrationRequest request, RoleEnum roleEnum, boolean requiresEmailVerification) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new InformationExistsException(
@@ -123,6 +149,12 @@ public class AuthService {
         return user;
     }
 
+    /**
+     * Activates the account when its verification token is valid; returns false when the token has expired.
+     *
+     * @param token the email verification token
+     * @return true if the account was activated, or false if the token has expired
+     */
     @Transactional
     public boolean verify(String token) {
         User user = userRepository.findByVerificationToken(token).orElseThrow(() ->
@@ -137,6 +169,11 @@ public class AuthService {
         return true;
     }
 
+    /**
+     * Sends the account's verification token and expiry information to its email address.
+     *
+     * @param user the account whose email address and verification token are used
+     */
     private void sendVerificationEmail(User user) {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setTo(user.getEmail());
@@ -146,11 +183,22 @@ public class AuthService {
         mailSender.send(msg);
     }
 
+    /**
+     * Assigns a random verification token and its configured expiry to the account.
+     *
+     * @param user the account receiving the token
+     */
     private void generateVerificationToken(User user) {
         user.setVerificationToken(UUID.randomUUID().toString());
         user.setTokenExpiry(LocalDateTime.now().plusMinutes(EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES));
     }
 
+    /**
+     * Authenticates the user and issues a JWT, sending verification when a pending account has no valid token.
+     *
+     * @param loginRequest the user's email and password
+     * @return the issued JWT
+     */
     public LoginResponse login(LoginRequest loginRequest) {
         User user = userRepository.findByEmail(loginRequest.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
@@ -182,6 +230,11 @@ public class AuthService {
         return new LoginResponse(jwtToken);
     }
 
+    /**
+     * Creates a time-limited password reset token and sends it to the user's email address.
+     *
+     * @param email the email address of the account requesting a password reset
+     */
     @Transactional
     public void forgotPassword(String email) {
         User user = userRepository.findByEmail(email)
@@ -196,6 +249,12 @@ public class AuthService {
         sendPasswordResetEmail(user.getEmail(), resetToken);
     }
 
+    /**
+     * Resets the password with a valid token, returning false if the token has expired.
+     *
+     * @param request the reset token and new password
+     * @return true if the password was reset, or false if the token has expired
+     */
     @Transactional
     public boolean resetPassword(ResetPasswordRequest request) {
         User user = userRepository.findByResetPasswordToken(request.token())
@@ -213,6 +272,11 @@ public class AuthService {
         return true;
     }
 
+    /**
+     * Changes the authenticated user's password after verifying the current password.
+     *
+     * @param request the current and new passwords
+     */
     @Transactional
     public void changePassword(ChangePasswordRequest request) {
         User user = authenticatedUser.get().user();
@@ -223,6 +287,12 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    /**
+     * Sends a password reset token and its expiry information to the specified email address.
+     *
+     * @param email the destination email address
+     * @param token the password reset token
+     */
     private void sendPasswordResetEmail(String email, String token) {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setTo(email);
@@ -234,6 +304,11 @@ public class AuthService {
         mailSender.send(msg);
     }
 
+    /**
+     * Revokes the current JWT by blacklisting it until its expiration time.
+     *
+     * @param authHeader the authorization header containing the JWT
+     */
     public void logout(String authHeader) {
         String JwtToken = authHeader.substring(7);
         String jti = jwtUtils.getJtiFromJwtToken(JwtToken);

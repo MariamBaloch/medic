@@ -25,6 +25,12 @@ public class ProfileService {
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorProfileRepository doctorProfileRepository;
 
+    /**
+     * Updates the authenticated patient's profile fields.
+     *
+     * @param request the patient profile values to apply
+     * @return the updated patient profile
+     */
     @Transactional
     public PatientProfileResponse updatePatientProfile(PatientProfileRequest request) {
         Long userId = authenticatedUser.getUserId();
@@ -37,6 +43,12 @@ public class ProfileService {
         return patientProfileMapper.toPatientProfileResponse(profile);
     }
 
+    /**
+     * Updates the authenticated doctor's profile fields.
+     *
+     * @param request the doctor profile values to apply
+     * @return the updated doctor profile
+     */
     @Transactional
     public DoctorProfileResponse updateDoctorProfile(DoctorProfileRequest request) {
         Long userId = authenticatedUser.getUserId();
@@ -49,6 +61,11 @@ public class ProfileService {
         return doctorProfileMapper.toDoctorProfileResponse(profile);
     }
 
+    /**
+     * Sets the verified flag on the specified doctor's profile.
+     *
+     * @param doctorProfileId the ID of the doctor profile to verify
+     */
     @Transactional
     public void verifyDoctor(Long doctorProfileId) {
         DoctorProfile profile = doctorProfileRepository.findById(doctorProfileId)

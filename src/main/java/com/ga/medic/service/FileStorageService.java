@@ -15,6 +15,13 @@ public class FileStorageService {
     @Value("${app.upload.base-dir:uploads}")
     private String baseDirectory;
 
+    /**
+     * Stores a non-empty file under a generated name while retaining its original extension.
+     *
+     * @param file the file to store
+     * @param subFolder the folder under the configured upload directory
+     * @return the stored file's path
+     */
     public String store(MultipartFile file, String subFolder) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Cannot store empty file.");
@@ -38,6 +45,11 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Deletes a stored file when present; filesystem deletion errors are ignored.
+     *
+     * @param filePath the path of the file to delete
+     */
     public void delete(String filePath) {
         if (filePath == null || filePath.isBlank()) return;
         try {
@@ -48,6 +60,12 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Extracts a lowercase extension from the uploaded file's original name.
+     *
+     * @param file the uploaded file whose original name is inspected
+     * @return the lowercase file extension, including its leading dot
+     */
     private String getFileExtension(MultipartFile file) {
         String originalFilename = file.getOriginalFilename();
 

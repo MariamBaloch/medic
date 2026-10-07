@@ -39,6 +39,8 @@ public class AvailabilityRuleService {
 
     /**
      * Returns all current and future availability rules for the logged-in doctor.
+     *
+     * @return the doctor's current and future rules
      */
     @Transactional(readOnly = true)
     public List<AvailabilityRuleResponse> listRules() {
@@ -48,8 +50,10 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Creates a new availability rule.
-     * Checks for overlap with any existing rule for the same doctor.
+     * Creates an availability rule after checking for overlap with the doctor's existing rules.
+     *
+     * @param request the schedule and date range for the new rule
+     * @return the created rule response
      */
     @Transactional
     public AvailabilityRuleUpdateResponse createRule(AvailabilityRuleRequest request) {
@@ -62,10 +66,11 @@ public class AvailabilityRuleService {
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(rule), null, null);
     }
 
-    /*
-     * Deletes an availability rule.
-     * Hard deletes the rule if it hasn't started and detaches any appointments associated with it.
-     * Soft deletes the rule if it has started by setting the end date to yesterday.
+    /**
+     * Deletes a future rule and detaches its appointments, or ends an active rule as of yesterday.
+     *
+     * @param ruleId the ID of the rule to delete
+     * @return the deletion result and any appointments detached from a future rule
      */
     @Transactional
     public AvailabilityRuleDeleteResponse deleteRule(Long ruleId) {
@@ -104,10 +109,11 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Updates an existing availability rule.
-     * If the existing rule has not started yet, it is updated directly.
-     * If the rule is already active, the old rule is ended and a new rule
-     * is created from the requested start date so that past schedules are preserved.
+     * Updates a future rule directly or ends an active rule and creates a replacement to preserve its history.
+     *
+     * @param ruleId the ID of the rule to update
+     * @param request the replacement schedule and date range
+     * @return the updated rule and any appointments outside its schedule
      */
     @Transactional
     public AvailabilityRuleUpdateResponse updateRule(Long ruleId, AvailabilityRuleRequest request) {
@@ -151,7 +157,11 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Retrieves the calendar for a doctor within a specified date range, including available slots and active appointments.
+     * Retrieves the authenticated doctor's calendar, including available slots and active appointments.
+     *
+     * @param from the first date in the calendar range
+     * @param to the last date in the calendar range
+     * @return the available slots and active appointments in the range
      */
     @Transactional
     public DoctorCalendarResponse getCalendar(LocalDate from, LocalDate to) {
@@ -164,6 +174,14 @@ public class AvailabilityRuleService {
         return new DoctorCalendarResponse(slots, appointmentMapper.toResponseList(appointments));
     }
 
+    /**
+     * Returns unbooked slots after validating the doctor and applying rules, exceptions, and current appointments.
+     *
+     * @param doctorId the doctor's profile ID
+     * @param from the first date to include
+     * @param to the last date to include
+     * @return the doctor's available slots in the date range
+     */
     @Transactional
     public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to) {
         if (!doctorProfileRepository.existsById(doctorId)) {
@@ -173,8 +191,11 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Finds future active appointments that fall outside the schedule defined by the given availability rule.
-     * Appointments are not deleted or canceled; they are returned to inform the doctor that they are outside the new schedule.
+     * Finds future active appointments outside a rule's schedule without changing those appointments.
+     *
+     * @param doctorId the doctor's profile ID
+     * @param rule the availability rule whose schedule is checked
+     * @return active future appointments that fall outside the rule's schedule
      */
     private List<Appointment> findAppointmentsOutsideRule(Long doctorId, AvailabilityRule rule) {
         LocalDate from = rule.getStartDate().isBefore(LocalDate.now()) ? LocalDate.now() : rule.getStartDate();
@@ -200,12 +221,12 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Checks whether a new or updated rule overlaps with another rule belonging to the same doctor.
-     * Two rules overlap when:
-     * - Their date ranges overlap.
-     * - They share at least one day of the week.
-     * - Their time ranges overlap.
-     * excludeId is used when updating a rule so that the rule being updated is not compared against itself.
+     * Rejects a rule that overlaps another rule belonging to the same doctor.
+     * Rules overlap when their date ranges and time ranges overlap on at least one shared day.
+     *
+     * @param doctorId the doctor's profile ID
+     * @param request the schedule and date range to check
+     * @param excludeId the existing rule ID to ignore, or null when creating a rule
      */
     private void checkRuleOverlap(Long doctorId, AvailabilityRuleRequest request, Long excludeId) {
         LocalDate endDate = request.endDate() != null ? request.endDate() : LocalDate.of(9999, 12, 31);
@@ -224,8 +245,12 @@ public class AvailabilityRuleService {
 
 
     /**
-     * Computes a list of available slots for a doctor within a specified date range.
-     * The availability is determined based on predefined rules, exceptions, and existing appointments.
+     * Computes available slots using the doctor's rules, exceptions, and active appointments.
+     *
+     * @param doctorId the doctor's profile ID
+     * @param from the first date to include
+     * @param to the last date to include
+     * @return sorted available slots in the date range
      */
     private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now();

@@ -29,7 +29,9 @@ public class AvailabilityExceptionService {
     private final AuthenticatedUser authenticatedUser;
 
     /**
-     * Retrieves a list of current and future availability exceptions for the authenticated doctor.
+     * Retrieves current and future availability exceptions for the authenticated doctor.
+     *
+     * @return the doctor's current and future availability exceptions
      */
     @Transactional
     public List<AvailabilityExceptionResponse> listExceptions() {
@@ -39,7 +41,10 @@ public class AvailabilityExceptionService {
     }
 
     /**
-     * Creates and saves an availability exception for a doctor, while checking for overlaps with existing exceptions and identifying affected appointments.
+     * Creates an availability exception after checking for overlaps and identifying affected appointments.
+     *
+     * @param request the date and optional time window to make unavailable
+     * @return the saved exception and any appointments it affects
      */
     @Transactional
     public AvailabilityExceptionResponse createException(AvailabilityExceptionRequest request) {
@@ -54,6 +59,10 @@ public class AvailabilityExceptionService {
 
     /**
      * Updates an existing availability exception for the authenticated doctor.
+     *
+     * @param exceptionId the ID of the exception to update
+     * @param request the replacement date and optional time window
+     * @return the updated exception and any appointments it affects
      */
     @Transactional
     public AvailabilityExceptionResponse updateException(Long exceptionId, AvailabilityExceptionRequest request) {
@@ -68,8 +77,12 @@ public class AvailabilityExceptionService {
     }
 
     /**
-     * Handles the creation of an AvailabilityExceptionResponse by saving an availability exception,
-     * identifying affected appointments, and generating a message regarding impacted appointments.
+     * Saves an exception and builds a response that includes appointments affected by it.
+     *
+     * @param request the date and optional time window of the exception
+     * @param doctor the doctor who owns the exception
+     * @param existing the new or updated exception to save
+     * @return the saved exception response and affected appointment details
      */
     private AvailabilityExceptionResponse getAvailabilityExceptionResponse(AvailabilityExceptionRequest request, DoctorProfile doctor, AvailabilityException existing) {
         existing = exceptionRepository.save(existing);
@@ -87,8 +100,10 @@ public class AvailabilityExceptionService {
     }
 
     /**
-     * Deletes an availability exception for the authenticated doctor's profile and returns a response
-     * indicating the result of the deletion, including any affected appointments.
+     * Deletes an exception and reports appointments that remain affected by its removal.
+     *
+     * @param exceptionId the ID of the exception to delete
+     * @return the deletion response, including appointments affected by removing the exception
      */
     @Transactional
     public AvailabilityExceptionDeleteResponse deleteException(Long exceptionId) {
@@ -112,7 +127,11 @@ public class AvailabilityExceptionService {
     }
 
     /**
-     * Checks for overlapping availability exceptions for a given doctor.
+     * Rejects an exception that overlaps another exception for the same doctor and date.
+     *
+     * @param doctorId the doctor's profile ID
+     * @param request the exception window to check
+     * @param excludeId the existing exception ID to ignore, or null when creating an exception
      */
     private void checkExceptionOverlap(Long doctorId, AvailabilityExceptionRequest request, Long excludeId) {
         List<AvailabilityException> existing = exceptionRepository.findByDoctorAndDateExcluding(doctorId, request.exceptionDate(), excludeId != null ? excludeId : -1L);

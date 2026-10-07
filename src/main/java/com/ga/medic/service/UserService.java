@@ -21,6 +21,12 @@ public class UserService {
     private final AuthenticatedUser authenticatedUser;
     private final UserMapper userMapper;
 
+    /**
+     * Validates and stores a replacement avatar, then updates the authenticated user's image URL.
+     *
+     * @param file the image file to use as the new avatar
+     * @return the stored avatar path
+     */
     @Transactional
     public String updateProfilePicture(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -48,6 +54,11 @@ public class UserService {
         return imageUrl;
     }
 
+    /**
+     * Retrieves the authenticated user's account details.
+     *
+     * @return the authenticated user's account response
+     */
     @Transactional
     public UserAccountResponse getUserAccount() {
         Long userId = authenticatedUser.getUserId();
