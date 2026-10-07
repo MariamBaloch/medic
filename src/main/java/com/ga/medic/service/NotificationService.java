@@ -24,6 +24,7 @@ public class NotificationService {
 
     private final NotificationMapper notificationMapper;
     private final NotificationRepository notificationRepository;
+    private final EmailService emailService;
     // Map to hold userId and all active SseEmitters for that user for multiple connections
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
@@ -109,5 +110,27 @@ public class NotificationService {
         notificationRepository.save(notification);
         NotificationResponse response = notificationMapper.toResponse(notification);
         sendNotification(user.getId(), response);
+        sendEmailNotification(user, type, action, title, message, relatedEntityId);
+    }
+
+    private void sendEmailNotification(User user, NotificationType type, NotificationAction action, String title,
+                                       String message, Long relatedEntityId) {
+        try {
+            emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    title,
+                    "email/notification",
+                    Map.of(
+                            "fullName", user.getFullName(),
+                            "title", title,
+                            "message", message,
+                            "type", type,
+                            "action", action,
+                            "relatedEntityId", relatedEntityId == null ? "" : relatedEntityId
+                    )
+            );
+        } catch (RuntimeException e) {
+            log.warn("Failed to send email notification to userId {}", user.getId(), e);
+        }
     }
 }

@@ -19,7 +19,6 @@ import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,7 +44,7 @@ public class AuthServiceTest {
     @Mock
     private RoleRepository roleRepository;
     @Mock
-    private JavaMailSender mailSender;
+    private EmailService emailService;
     @Mock
     private SpecializationRepository specializationRepository;
     @Mock

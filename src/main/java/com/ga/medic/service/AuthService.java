@@ -18,9 +18,8 @@ import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.security.JWTUtils;
 import com.ga.medic.security.MyUserDetails;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.ga.medic.config.Constants.EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES;
@@ -49,11 +49,14 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserMapper userMapper;
     private final RoleRepository roleRepository;
-    private final JavaMailSender mailSender;
+    private final EmailService emailService;
     private final SpecializationRepository specializationRepository;
     private final DoctorProfileRepository doctorProfileRepository;
     private final AuthenticatedUser authenticatedUser;
     private final TokenBlacklistService tokenBlacklistService;
+
+    @Value("${app.base-url:http://localhost:8080}")
+    private String appBaseUrl;
 
     /**
      * Registers a patient account and creates its patient profile.
@@ -141,7 +144,6 @@ public class AuthService {
         if (requiresEmailVerification) {
             user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
             generateVerificationToken(user);
-//          TODO enable later, disabled to prevent spam
             sendVerificationEmail(user);
         } else {
             user.setStatus(UserStatusEnum.ACTIVE);
@@ -175,12 +177,16 @@ public class AuthService {
      * @param user the account whose email address and verification token are used
      */
     private void sendVerificationEmail(User user) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setTo(user.getEmail());
-        msg.setSubject("Verify your email");
-        msg.setText("Click to verify: http://localhost:8080/auth/users/verify?token=" + user.getVerificationToken()
-                + " \n\nThe token expires in " + EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES + " minutes.");
-        mailSender.send(msg);
+        emailService.sendTemplateEmail(
+                user.getEmail(),
+                "Verify your email",
+                "email/email-verification",
+                Map.of(
+                        "fullName", user.getFullName(),
+                        "verificationLink", appBaseUrl + "/auth/users/verify?token=" + user.getVerificationToken(),
+                        "expiryMinutes", EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES
+                )
+        );
     }
 
     /**
@@ -250,7 +256,7 @@ public class AuthService {
 
         userRepository.save(user);
 
-        sendPasswordResetEmail(user.getEmail(), resetToken);
+        sendPasswordResetEmail(user, resetToken);
     }
 
     /**
@@ -294,18 +300,20 @@ public class AuthService {
     /**
      * Sends a password reset token and its expiry information to the specified email address.
      *
-     * @param email the destination email address
+     * @param user the destination user
      * @param token the password reset token
      */
-    private void sendPasswordResetEmail(String email, String token) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setTo(email);
-        msg.setSubject("Password Reset Token");
-        msg.setText("Your password reset token is:\n\n"
-                + token + "\n\n"
-                + "Use this token to reset your password by sending a POST request to /auth/users/reset-password with your token and new password.\n\n"
-                + "This token will expire in " + PASSWORD_RESET_TOKEN_EXPIRY_MINUTES + " minutes.");
-        mailSender.send(msg);
+    private void sendPasswordResetEmail(User user, String token) {
+        emailService.sendTemplateEmail(
+                user.getEmail(),
+                "Password Reset Token",
+                "email/password-reset",
+                Map.of(
+                        "fullName", user.getFullName(),
+                        "resetToken", token,
+                        "expiryMinutes", PASSWORD_RESET_TOKEN_EXPIRY_MINUTES
+                )
+        );
     }
 
     /**
