@@ -165,7 +165,8 @@ public class AppointmentService {
             throw new IllegalArgumentException("This appointment is already cancelled");
         }
 
-        if (appointment.getStatus() == AppointmentStatusEnum.COMPLETED) {
+        if (appointment.getStatus() == AppointmentStatusEnum.COMPLETED
+                || appointment.getStatus() == AppointmentStatusEnum.NO_SHOW) {
             throw new IllegalArgumentException("Cannot cancel a completed appointment");
         }
 
@@ -185,6 +186,36 @@ public class AppointmentService {
                 appointment.getId()
         );
 
+        return appointmentMapper.toResponse(appointment);
+    }
+
+    /**
+     * Updates a booked appointment owned by the authenticated doctor to a completed outcome.
+     *
+     * @param appointmentId the appointment to update
+     * @param status the outcome, either COMPLETED or NO_SHOW
+     * @return the updated appointment details
+     */
+    @Transactional
+    public AppointmentResponse updateDoctorAppointmentStatus(Long appointmentId, AppointmentStatusEnum status) {
+        if (status != AppointmentStatusEnum.COMPLETED && status != AppointmentStatusEnum.NO_SHOW) {
+            throw new IllegalArgumentException("Appointment status must be COMPLETED or NO_SHOW");
+        }
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
+
+        Long doctorId = authenticatedUser.get().user().getDoctorProfile().getId();
+        if (!appointment.getDoctor().getId().equals(doctorId)) {
+            throw new ForbiddenActionException("You can only update your own appointments");
+        }
+
+        if (appointment.getStatus() != AppointmentStatusEnum.BOOKED) {
+            throw new IllegalArgumentException("Only booked appointments can be marked completed or no-show");
+        }
+
+        appointment.setStatus(status);
+        appointment = appointmentRepository.save(appointment);
         return appointmentMapper.toResponse(appointment);
     }
 

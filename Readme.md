@@ -126,6 +126,7 @@ running.
 | PUT          | `/patient/appointments/{id}/cancel`               | Cancel an appointment              | Patient       |
 | GET          | `/patient/appointments/doctors/{id}/availability` | View doctor availability           | Patient       |
 | GET          | `/doctors/appointments`                           | Get doctor appointment history     | Doctor        |
+| PATCH        | `/doctors/appointments/{appointmentId}/status`    | Update appointment outcome         | Doctor        |
 | GET          | `/doctors/availability/calendar`                  | Get doctor calendar                | Doctor        |
 | GET          | `/doctors/availability/rules`                     | List availability rules            | Doctor        |
 | POST         | `/doctors/availability/rules`                     | Create availability rule           | Doctor        |
@@ -183,34 +184,24 @@ Follow these steps to run the application locally:
     - API Base URL: `http://localhost:8080`
     - Swagger UI: `http://localhost:8080/swagger-ui.html`
 
-## Unsolved Problems
-
-- Real-time notifications are currently only sent to active SSE connections. Offline users will miss notifications
-  unless stored persistently for later retrieval via a REST endpoint.
-- Handling of overlapping availability rules could be further optimized for performance.
-
 ## Major Challenges
 
 - **Availability Engine:** Calculating precise 15-minute appointment slots based on dynamic weekly schedules while
   excluding specific date/time exceptions and already booked appointments proved mathematically and logically
   challenging.
-- **Real-Time Notifications:** Managing concurrent `SseEmitter` connections and ensuring thread-safe delivery of events
-  required careful consideration of Spring's asynchronous request handling.
 
 ## Future Improvements
 
 - **Soft Delete Implementation:** Fully implement soft deletes across major entities. This will include adding an admin
   endpoint (`DELETE /admin/users/{id}`) to deactivate users (setting status to `INACTIVE` and updating `deletedAt`),
   enforcing that inactive users cannot log in.
-- **Enhanced Booking Statuses:** Expand the appointment workflow to include meaningful statuses like `PENDING` and
-  `CONFIRMED`. Add a doctor-facing endpoint to manage status updates (e.g., `BOOKED` → `CONFIRMED` → `COMPLETED`).
 - **Integration Testing:** Expand test coverage by using the dedicated `test` profile (with the configured in-memory H2
   database) for comprehensive integration testing, rather than relying solely on mocked unit tests.
 - **Redis Caching for Availability:** Optimize performance by caching the results of `computeAvailableSlots` in Redis.
   This cache will be strategically invalidated and refreshed only when a doctor updates their availability rules or
   exceptions.
-- Implement a complete frontend application (React) to consume the API.
-- Implement more robust API testing covering the booking engine edge cases.
+- **Frontend:** Implement a complete frontend application (React) to consume the API.
+- **Integration Testing:** Implement more robust API testing covering the booking engine edge cases.
 
 ## Credits & Resources
 
