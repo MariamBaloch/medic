@@ -10,7 +10,7 @@ import java.util.Set;
 
 public record AvailabilityRuleResponse(
 
-        @Schema(description = "Rule ID", example = "1")
+        @Schema(description = "ID of this availability rule. For an update that replaces an already-started rule, this is the new rule ID to use in subsequent update or delete requests.", example = "1")
         Long id,
 
         @Schema(description = "Start date of the rule", example = "01/10/2026")

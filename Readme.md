@@ -17,6 +17,17 @@ while doctors can manage their schedules, availability rules, and appointment hi
 - **Security & Reliability:** Global exception handling, API rate limiting using Redis, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
+## Demo Credentials
+
+The application is pre-seeded with sample data to allow you to easily test the endpoints without needing to register new
+accounts.
+
+| Role    | Email                | Password  |
+|---------|----------------------|-----------|
+| Admin   | `admin@medic.com`    | `Potato!` |
+| Doctor  | `doctor1@medic.com`  | `Potato!` |
+| Patient | `patient1@medic.com` | `Potato!` |
+
 ## Technologies
 
 - **Java 17** & **Spring Boot 3**
@@ -38,6 +49,36 @@ The application follows a clean-layered architecture:
 
 Additional architectural components include distinct layers for DTOs, MapStruct Mappers, Security Configurations, Global
 Exception Handling, and custom Annotations (e.g., for Audit Logging).
+
+## Booking Engine Design
+
+The appointment booking system utilizes a highly efficient **rule-based engine** rather than a naive date-generation
+model.
+
+### Why Rule-Based?
+
+A naive approach (generating and storing rows for every possible 15-30 minute slot for the next 5 years or even 3
+months) would result in a massive database footprint (millions of rows per doctor) and slow query performance.
+
+Instead, the **Rule-Based Engine** models availability conceptually:
+
+- **`AvailabilityRule`:** Defines a recurring schedule (e.g., "Monday and Wednesday, 9 AM to 5 PM, 30-minute slots, for
+  the next 6 months").
+- **`AvailabilityException`:** Defines temporary exceptions to the regular availability schedule, such as being sick for
+  a day or taking vacation.
+- **`Appointment`:** Represents actual booked slots.
+
+When a patient queries a doctor's availability for a given date range, the engine **dynamically calculates** available
+slots in real-time by:
+
+1. Fetching all active `AvailabilityRule` for the doctor.
+2. Generating a virtual schedule of time slots in memory.
+3. Fetching and applying `AvailabilityException`s to cross out unavailable times.
+4. Fetching existing `Appointment`s to cross out already booked slots.
+5. Returning the final list of open slots to the user.
+
+This approach guarantees high performance, negligible storage requirements, and immediate reflection of any schedule
+changes.
 
 ## General Approach
 

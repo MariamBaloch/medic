@@ -51,10 +51,13 @@ public class DoctorAvailabilityController {
     }
 
     @Operation(summary = "Update availability rule",
-            description = "Update an existing availability rule. If the rule has already started, the old rule is closed and a new one is created.")
+            description = "Update the rule identified by the path ID. A rule whose start date is in the future is updated in place and keeps its ID. If the rule has already started (its start date is today or earlier), it is closed the day before the requested start date and a replacement rule is created. In that case, the response's `rule.id` is the replacement rule's ID; use that ID for any later update or delete request.")
     @PutMapping("/rules/{id}")
     @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor updated an availability rule")
-    public ResponseEntity<AvailabilityRuleUpdateResponse> updateRule(@PathVariable Long id, @Valid @RequestBody AvailabilityRuleRequest request) {
+    public ResponseEntity<AvailabilityRuleUpdateResponse> updateRule(
+            @Parameter(description = "ID of the existing availability rule to update", example = "1")
+            @PathVariable Long id,
+            @Valid @RequestBody AvailabilityRuleRequest request) {
         return ResponseEntity.ok(availabilityRuleService.updateRule(id, request));
     }
 
