@@ -61,12 +61,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UsernameNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUsernameNotFoundException(HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, "Invalid email or password", request, null);
+        return build(HttpStatus.UNAUTHORIZED, "Invalid email or password", request, null);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentialsException(BadCredentialsException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
+        return build(HttpStatus.UNAUTHORIZED, "Invalid email or password", request, null);
     }
 
     @ExceptionHandler(EmailVerificationRequiredException.class)
