@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.ga</groupId>
     <artifactId>medic</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>${revision}</version>
     <name>medic</name>
     <description>Medical Portal</description>
     <url/>
@@ -27,10 +27,15 @@
         <url/>
     </scm>
     <properties>
+        <revision>0.0.1-SNAPSHOT</revision>
+        <spring-boot-aop.version>4.0.0-M2</spring-boot-aop.version>
         <java.version>17</java.version>
         <springdoc.version>3.1.0</springdoc.version>
         <jjwt.version>0.11.5</jjwt.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <bucket4j.version>8.10.1</bucket4j.version>
+        <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <springdoc-maven-plugin.version>1.5</springdoc-maven-plugin.version>
     </properties>
     <dependencies>
         <dependency>
@@ -46,7 +51,6 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
         </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
@@ -77,7 +81,7 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
-            <version>4.0.0-M2</version>
+            <version>${spring-boot-aop.version}</version>
         </dependency>
 
         <dependency>
@@ -127,13 +131,23 @@
         <dependency>
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j-core</artifactId>
-            <version>8.10.1</version>
+            <version>${bucket4j.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j-redis</artifactId>
-            <version>8.10.1</version>
+            <version>${bucket4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
@@ -157,7 +171,7 @@
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok-mapstruct-binding</artifactId>
-                            <version>0.2.0</version>
+                            <version>${lombok-mapstruct-binding.version}</version>
                         </path>
                         <path>
                             <groupId>org.mapstruct</groupId>
@@ -171,7 +185,7 @@
             <plugin>
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                <version>1.5</version>
+                <version>${springdoc-maven-plugin.version}</version>
             </plugin>
         </plugins>
 
