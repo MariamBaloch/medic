@@ -13,7 +13,9 @@ while doctors can manage their schedules, availability rules, and appointment hi
 - **Profile Management:** Users can manage their profiles and upload avatars.
 - **Advanced Booking System:** Real-time availability calculation based on doctor-defined schedules and exceptions.
   Double-booking prevention.
-- **Real-Time Notifications:** Server-Sent Events (SSE) push notifications for appointment updates.
+- **Real-Time & Email Notifications:** Server-Sent Events (SSE) push notifications for appointment updates, with
+  matching
+  styled email notifications.
 - **Security & Reliability:** Global exception handling, API rate limiting using Redis, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
@@ -30,13 +32,27 @@ accounts.
 
 ## Technologies
 
-- **Java 17** & **Spring Boot 3**
-- **Spring Security** & **JWT** for Authentication
-- **PostgreSQL** (Relational Database)
-- **Redis** (Rate Limiting via Bucket4j)
-- **Maven** (Dependency Management)
-- **Swagger/OpenAPI** (API Documentation)
-- **Server-Sent Events (SSE)** (Real-time Notifications)
+- **Java 17**
+- **Spring Boot 4.1.1**
+- **Spring Web MVC** for REST APIs
+- **Spring Security** for authentication and role-based authorization
+- **JJWT** for JWT creation and validation
+- **Spring Data JPA** for persistence
+- **PostgreSQL** as the main relational database
+- **Spring Validation** for request validation
+- **Spring Mail** for email delivery
+- **Thymeleaf** for styled HTML email templates
+- **Spring Data Redis** for Redis integration
+- **Bucket4j** with Redis support for rate limiting
+- **Spring AOP** for cross-cutting concerns such as audit logging
+- **Spring Boot Actuator** for health/monitoring endpoints
+- **Springdoc OpenAPI / Swagger UI** for API documentation
+- **MapStruct** for DTO/entity mapping
+- **Lombok** for reducing boilerplate
+- **Server-Sent Events (SSE)** for real-time notifications
+- **JUnit** and **Spring Boot Test** for testing
+- **Spring Boot DevTools** for local development
+- **Maven** for dependency management and builds
 
 ## Architecture
 
@@ -165,11 +181,12 @@ Follow these steps to run the application locally:
    DB_URL=jdbc:postgresql://localhost:5432/medic
    DB_USERNAME=postgres
    DB_PASSWORD=your_password
-   MAIL_USERNAME=your_email@gmail.com
-   MAIL_PASSWORD=your_app_password
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   ```
+    MAIL_USERNAME=your_email@gmail.com
+    MAIL_PASSWORD=your_app_password
+    APP_BASE_URL=http://localhost:8080
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+    ```
 
 4. **Start the Application:**
    Run the application using Maven:
