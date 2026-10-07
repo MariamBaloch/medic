@@ -113,7 +113,8 @@ User stories and project tracking were managed on Trello:
 
 The database schema was designed to cleanly separate user authentication data from profile-specific data and booking
 logic.
-[View ERD on Lucidchart](https://lucid.app/lucidchart/db460fc0-48ad-492c-8cb5-6c099a487364/view)
+
+![ERD.png](docs/ERD.png)
 
 ## API Documentation
 
