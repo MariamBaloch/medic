@@ -217,7 +217,6 @@ Follow these steps to run the application locally:
   This cache will be strategically invalidated and refreshed only when a doctor updates their availability rules or
   exceptions.
 - **Frontend:** Implement a complete frontend application (React) to consume the API.
-- **Integration Testing:** Implement more robust API testing covering the booking engine edge cases.
 
 ## Credits & Resources
 
