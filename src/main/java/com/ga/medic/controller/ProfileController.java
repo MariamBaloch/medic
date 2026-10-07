@@ -11,6 +11,7 @@ import com.ga.medic.service.ProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +34,7 @@ public class ProfileController {
     @PatchMapping("/patient")
     @PreAuthorize("hasRole('PATIENT')")
     @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.PROFILE, description = "Patient updated their profile")
-    public ResponseEntity<PatientProfileResponse> updatePatientProfile(@RequestBody PatientProfileRequest request) {
+    public ResponseEntity<PatientProfileResponse> updatePatientProfile(@Valid @RequestBody PatientProfileRequest request) {
         return ResponseEntity.ok().body(profileService.updatePatientProfile(request));
     }
 
@@ -42,7 +43,7 @@ public class ProfileController {
     @PatchMapping("/doctor")
     @PreAuthorize("hasRole('DOCTOR')")
     @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.PROFILE, description = "Doctor updated their profile")
-    public ResponseEntity<DoctorProfileResponse> updateDoctorProfile(@RequestBody DoctorProfileRequest request) {
+    public ResponseEntity<DoctorProfileResponse> updateDoctorProfile(@Valid @RequestBody DoctorProfileRequest request) {
         return ResponseEntity.ok().body(profileService.updateDoctorProfile(request));
     }
 }
