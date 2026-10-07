@@ -182,11 +182,11 @@ Follow these steps to run the application locally:
    DB_URL=jdbc:postgresql://localhost:5432/medic
    DB_USERNAME=postgres
    DB_PASSWORD=your_password
-    MAIL_USERNAME=your_email@gmail.com
-    MAIL_PASSWORD=your_app_password
-    APP_BASE_URL=http://localhost:8080
-    REDIS_HOST=localhost
-    REDIS_PORT=6379
+   MAIL_USERNAME=your_email@gmail.com
+   MAIL_PASSWORD=your_app_password
+   APP_BASE_URL=http://localhost:8080
+   REDIS_HOST=localhost
+   REDIS_PORT=6379
     ```
 
 4. **Start the Application:**
