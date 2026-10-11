@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.*;
+import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AppointmentMapper;
@@ -67,7 +68,7 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Deletes a future rule and detaches its appointments, or ends an active rule as of yesterday.
+     * Deletes a future rule and detaches its appointments or ends an active rule as of yesterday.
      *
      * @param ruleId the ID of the rule to delete
      * @return the deletion result and any appointments detached from a future rule
@@ -105,13 +106,13 @@ public class AvailabilityRuleService {
         }
 
         List<AppointmentResponse> affectedAppointmentResponses = appointmentMapper.toResponseList(affectedAppointments);
-        return new AvailabilityRuleDeleteResponse(true, affectedAppointmentResponses, message);
+        return new AvailabilityRuleDeleteResponse(hardDeleted, affectedAppointmentResponses, message);
     }
 
     /**
      * Updates a future rule directly or ends an active rule and creates a replacement to preserve its history.
      *
-     * @param ruleId the ID of the rule to update
+     * @param ruleId  the ID of the rule to update
      * @param request the replacement schedule and date range
      * @return the updated rule and any appointments outside its schedule
      */
@@ -134,7 +135,7 @@ public class AvailabilityRuleService {
             ruleMapper.updateRuleFromRequest(request, existing);
             existing = ruleRepository.save(existing);
 
-            affectedAppointments = findAppointmentsOutsideRule(doctor.getId(), existing);
+            affectedAppointments = findAppointmentsOutsideRule(existing.getId(), existing);
         } else {
             LocalDate newStartDate = request.startDate();
 
@@ -149,7 +150,7 @@ public class AvailabilityRuleService {
             newRule = ruleRepository.save(newRule);
             existing = newRule;
 
-            affectedAppointments = findAppointmentsOutsideRule(doctor.getId(), newRule);
+            affectedAppointments = findAppointmentsOutsideRule(ruleId, newRule);
         }
         List<AppointmentResponse> affectedAppointmentResponseList = affectedAppointments.isEmpty() ? null : appointmentMapper.toResponseList(affectedAppointments);
         String message = (affectedAppointmentResponseList != null) ? affectedAppointmentResponseList.size() + " existing appointment(s) outside the new schedule were kept" : null;
@@ -160,7 +161,7 @@ public class AvailabilityRuleService {
      * Retrieves the authenticated doctor's calendar, including available slots and active appointments.
      *
      * @param from the first date in the calendar range
-     * @param to the last date in the calendar range
+     * @param to   the last date in the calendar range
      * @return the available slots and active appointments in the range
      */
     @Transactional
@@ -178,8 +179,8 @@ public class AvailabilityRuleService {
      * Returns unbooked slots after validating the doctor and applying rules, exceptions, and current appointments.
      *
      * @param doctorId the doctor's profile ID
-     * @param from the first date to include
-     * @param to the last date to include
+     * @param from     the first date to include
+     * @param to       the last date to include
      * @return the doctor's available slots in the date range
      */
     @Transactional
@@ -193,40 +194,31 @@ public class AvailabilityRuleService {
     /**
      * Finds future active appointments outside a rule's schedule without changing those appointments.
      *
-     * @param doctorId the doctor's profile ID
      * @param rule the availability rule whose schedule is checked
      * @return active future appointments that fall outside the rule's schedule
      */
-    private List<Appointment> findAppointmentsOutsideRule(Long doctorId, AvailabilityRule rule) {
+    private List<Appointment> findAppointmentsOutsideRule(Long ruleId, AvailabilityRule rule) {
         LocalDate from = rule.getStartDate().isBefore(LocalDate.now()) ? LocalDate.now() : rule.getStartDate();
-        LocalDate to = rule.getEndDate() != null ? rule.getEndDate() : from.plusYears(1);
 
-        List<Appointment> futureAppointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
-
-        List<Appointment> outsideAppointments = new ArrayList<>();
-        for (Appointment appointment : futureAppointments) {
-            boolean outsideSchedule = false;
-
-            if (!rule.getDaysOfWeek().contains(appointment.getAppointmentDate().getDayOfWeek())) {
-                outsideSchedule = true;
-            } else if (appointment.getStartTime().isBefore(rule.getStartTime()) || appointment.getEndTime().isAfter(rule.getEndTime())) {
-                outsideSchedule = true;
-            }
-
-            if (outsideSchedule) {
-                outsideAppointments.add(appointment);
-            }
-        }
-        return outsideAppointments;
+        return appointmentRepository.findByAvailabilityRuleId(ruleId).stream()
+                .filter(appointment -> appointment.getStatus() != AppointmentStatusEnum.CANCELLED)
+                .filter(appointment -> !appointment.getAppointmentDate().isBefore(from))
+                .filter(appointment ->
+                        (appointment.getAppointmentDate().isBefore(rule.getStartDate())
+                                || (rule.getEndDate() != null && appointment.getAppointmentDate().isAfter(rule.getEndDate()))
+                                || !rule.getDaysOfWeek().contains(appointment.getAppointmentDate().getDayOfWeek()))
+                                || appointment.getStartTime().isBefore(rule.getStartTime())
+                                || appointment.getEndTime().isAfter(rule.getEndTime()))
+                .toList();
     }
 
     /**
      * Rejects a rule that overlaps another rule belonging to the same doctor.
      * Rules overlap when their date ranges and time ranges overlap on at least one shared day.
      *
-     * @param doctorId the doctor's profile ID
-     * @param request the schedule and date range to check
-     * @param excludeId the existing rule ID to ignore, or null when creating a rule
+     * @param doctorId  the doctor's profile ID
+     * @param request   the schedule and date range to check
+     * @param excludeId the existing rule ID to ignore or null when creating a rule
      */
     private void checkRuleOverlap(Long doctorId, AvailabilityRuleRequest request, Long excludeId) {
         LocalDate endDate = request.endDate() != null ? request.endDate() : LocalDate.of(9999, 12, 31);
@@ -248,8 +240,8 @@ public class AvailabilityRuleService {
      * Computes available slots using the doctor's rules, exceptions, and active appointments.
      *
      * @param doctorId the doctor's profile ID
-     * @param from the first date to include
-     * @param to the last date to include
+     * @param from     the first date to include
+     * @param to       the last date to include
      * @return sorted available slots in the date range
      */
     private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to) {
