@@ -13,7 +13,7 @@ import org.mapstruct.Mapping;
 import java.time.LocalTime;
 import java.util.List;
 
-@Mapper(config = GlobalMapperConfig.class)
+@Mapper(config = GlobalMapperConfig.class, uses = SpecializationMapper.class)
 public interface AppointmentMapper {
 
     @Mapping(target = "id", ignore = true)
@@ -29,6 +29,7 @@ public interface AppointmentMapper {
 
     @Mapping(target = "doctorId", source = "doctor.id")
     @Mapping(target = "doctorName", source = "doctor.user.fullName")
+    @Mapping(target = "specialization", source = "doctor.specialization")
     @Mapping(target = "patientId", source = "patient.id")
     @Mapping(target = "patientName", source = "patient.user.fullName")
     @Mapping(target = "audit.createdAt", source = "createdAt")

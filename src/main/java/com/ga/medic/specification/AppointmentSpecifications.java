@@ -40,4 +40,9 @@ public class AppointmentSpecifications {
         return (root, query, cb) -> status == null ? null
                 : cb.equal(root.get("status"), status);
     }
+
+    public static Specification<Appointment> withSpecialization(Long specializationId) {
+        return (root, query, cb) -> specializationId == null ? null
+                : cb.equal(root.get("doctor").get("specialization").get("id"), specializationId);
+    }
 }

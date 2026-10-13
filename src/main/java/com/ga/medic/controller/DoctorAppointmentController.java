@@ -34,7 +34,7 @@ public class DoctorAppointmentController {
 
     @GetMapping
     @Operation(summary = "Get my appointment history",
-            description = "Returns the authenticated doctor's appointments, including past appointments, with optional patient, date-range, and status filters.")
+            description = "Returns the authenticated doctor's appointments, including past appointments, with optional patient, date-range, status, and specialization filters.")
     public ResponseEntity<PageResponse<AppointmentResponse>> getMyAppointments(
             @Parameter(description = "Patient profile ID") @RequestParam(required = false) Long patientId,
             @ParameterObject AppointmentFilterRequest filters,

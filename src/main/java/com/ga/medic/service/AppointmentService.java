@@ -64,7 +64,8 @@ public class AppointmentService {
                 .and(withOptionalDoctor(doctorId))
                 .and(fromDate(filters.getDateFrom()))
                 .and(toDate(filters.getDateTo()))
-                .and(withStatus(filters.getStatus()));
+                .and(withStatus(filters.getStatus()))
+                .and(withSpecialization(filters.getSpecializationId()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
@@ -87,7 +88,8 @@ public class AppointmentService {
                 .and(withOptionalPatient(patientId))
                 .and(fromDate(filters.getDateFrom()))
                 .and(toDate(filters.getDateTo()))
-                .and(withStatus(filters.getStatus()));
+                .and(withStatus(filters.getStatus()))
+                .and(withSpecialization(filters.getSpecializationId()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
