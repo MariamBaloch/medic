@@ -1,5 +1,8 @@
 package com.ga.medic.enums;
 
+import lombok.Getter;
+
+@Getter
 public enum AppointmentStatusEnum {
     BOOKED("Booked"),
     COMPLETED("Completed"),
@@ -12,7 +15,4 @@ public enum AppointmentStatusEnum {
         this.label = label;
     }
 
-    public String getLabel() {
-        return label;
-    }
 }
