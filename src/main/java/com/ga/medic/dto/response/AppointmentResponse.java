@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -24,6 +25,9 @@ public record AppointmentResponse(
         @Schema(description = "Doctor's medical specialization details")
         SpecializationResponse specialization,
 
+        @Schema(description = "Doctor's qualification", example = "MBBS, MD")
+        String doctorQualification,
+
         @Schema(description = "Patient profile ID", example = "2")
         Long patientId,
 
@@ -41,6 +45,9 @@ public record AppointmentResponse(
         @Schema(description = "End time", example = "10:30")
         @JsonFormat(pattern = "HH:mm")
         LocalTime endTime,
+
+        @Schema(description = "Consultation fee charged at the time of booking", example = "25.00")
+        BigDecimal bookingFee,
 
         @Schema(description = "Appointment status", example = "BOOKED")
         AppointmentStatusEnum status,

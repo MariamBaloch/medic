@@ -124,29 +124,29 @@ FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'docto
 AND NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = dp.id AND reason = 'Sick Leave');
 
 -- Seed Appointments (Assume constraints on appointment_date and start_time to avoid unique constraint violation)
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '1 day', '09:00:00', '09:30:00', 'BOOKED', 'General Checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '1 day', '09:00:00', '09:30:00', dp.consultation_fee, 'BOOKED', 'General Checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient1@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '1 day' AND a.start_time = '09:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '2 days', '10:00:00', '10:30:00', 'BOOKED', 'Follow up', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '2 days', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'Follow up', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient2@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '2 days' AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '3 days', '10:00:00', '10:15:00', 'BOOKED', 'Headache', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '3 days', '10:00:00', '10:15:00', dp.consultation_fee, 'BOOKED', 'Headache', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient1@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '3 days' AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '14:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '4 days', '14:00:00', '14:15:00', 'BOOKED', 'Migraine', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '14:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '4 days', '14:00:00', '14:15:00', dp.consultation_fee, 'BOOKED', 'Migraine', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient2@medic.com'
