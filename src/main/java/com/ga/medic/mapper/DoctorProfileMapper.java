@@ -10,7 +10,8 @@ import org.mapstruct.MappingTarget;
 
 @Mapper(config = GlobalMapperConfig.class, uses = SpecializationMapper.class)
 public interface DoctorProfileMapper {
-    
+
+    @Mapping(target = "doctorProfileId", source = "id")
     @Mapping(target = "specialization", source = "specialization")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
