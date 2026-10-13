@@ -4,6 +4,7 @@ import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
+import com.ga.medic.dto.response.AppointmentStatusResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
@@ -93,6 +94,15 @@ public class AppointmentService {
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+    }
+
+    /**
+     * Returns all appointment statuses with their display labels.
+     *
+     * @return the list of appointment status options
+     */
+    public List<AppointmentStatusResponse> getAppointmentStatuses() {
+        return appointmentMapper.toStatusResponses(List.of(AppointmentStatusEnum.values()));
     }
 
     /**

@@ -3,6 +3,8 @@ package com.ga.medic.mapper;
 import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
+import com.ga.medic.dto.response.AppointmentStatusResponse;
+import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
@@ -39,4 +41,10 @@ public interface AppointmentMapper {
     AppointmentResponse toResponse(Appointment appointment);
 
     List<AppointmentResponse> toResponseList(List<Appointment> appointments);
+
+    @Mapping(target = "value", source = "status")
+    @Mapping(target = "label", source = "label")
+    AppointmentStatusResponse toStatusResponse(AppointmentStatusEnum status);
+
+    List<AppointmentStatusResponse> toStatusResponses(List<AppointmentStatusEnum> statuses);
 }

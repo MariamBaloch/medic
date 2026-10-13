@@ -144,6 +144,7 @@ running.
 | GET          | `/patient/appointments/doctors/{id}/availability` | View doctor availability           | Patient       |
 | GET          | `/doctors/appointments`                           | Get doctor appointment history     | Doctor        |
 | PATCH        | `/doctors/appointments/{appointmentId}/status`    | Update appointment outcome         | Doctor        |
+| GET          | `/appointments/statuses`                          | List appointment statuses          | Authenticated |
 | GET          | `/doctors/availability/calendar`                  | Get doctor calendar                | Doctor        |
 | GET          | `/doctors/availability/rules`                     | List availability rules            | Doctor        |
 | POST         | `/doctors/availability/rules`                     | Create availability rule           | Doctor        |
