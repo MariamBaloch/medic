@@ -2,6 +2,7 @@ package com.ga.medic.mapper;
 
 import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
@@ -32,6 +33,7 @@ public interface AppointmentMapper {
 
     @Mapping(target = "doctorId", source = "doctor.id")
     @Mapping(target = "doctorName", source = "doctor.user.fullName")
+    @Mapping(target = "doctorImageUrl", source = "doctor.user.imageUrl")
     @Mapping(target = "specialization", source = "doctor.specialization")
     @Mapping(target = "doctorQualification", source = "doctor.qualification")
     @Mapping(target = "patientId", source = "patient.id")
@@ -41,6 +43,17 @@ public interface AppointmentMapper {
     AppointmentResponse toResponse(Appointment appointment);
 
     List<AppointmentResponse> toResponseList(List<Appointment> appointments);
+
+    @Mapping(target = "doctorName", source = "doctor.user.fullName")
+    @Mapping(target = "doctorImageUrl", source = "doctor.user.imageUrl")
+    @Mapping(target = "doctorQualification", source = "doctor.qualification")
+    @Mapping(target = "specialization", source = "doctor.specialization")
+    @Mapping(target = "doctorYearsOfExperience", source = "doctor.yearsOfExperience")
+    @Mapping(target = "doctorHospitalAffiliation", source = "doctor.hospitalAffiliation")
+    @Mapping(target = "doctorClinicAddress", source = "doctor.clinicAddress")
+    @Mapping(target = "doctorLicenseNumber", source = "doctor.licenseNumber")
+    @Mapping(target = "doctorBio", source = "doctor.bio")
+    AppointmentDetailResponse toDetailResponse(Appointment appointment);
 
     @Mapping(target = "value", source = "status")
     @Mapping(target = "label", source = "label")

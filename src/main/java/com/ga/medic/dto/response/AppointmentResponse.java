@@ -22,6 +22,9 @@ public record AppointmentResponse(
         @Schema(description = "Doctor's full name", example = "Dr. Mariam Ali")
         String doctorName,
 
+        @Schema(description = "Doctor's profile image URL")
+        String doctorImageUrl,
+
         @Schema(description = "Doctor's medical specialization details")
         SpecializationResponse specialization,
 

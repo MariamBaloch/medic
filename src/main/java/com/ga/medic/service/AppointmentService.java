@@ -3,6 +3,7 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
+import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
@@ -70,6 +71,26 @@ public class AppointmentService {
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+    }
+
+    /**
+     * Returns a single appointment belonging to the authenticated patient, including the doctor's profile.
+     *
+     * @param appointmentId the ID of the appointment to retrieve
+     * @return the appointment details
+     */
+    @Transactional
+    public AppointmentDetailResponse getPatientAppointment(Long appointmentId) {
+        Long currentUserId = authenticatedUser.getUserId();
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
+
+        if (!appointment.getPatient().getUser().getId().equals(currentUserId)) {
+            throw new ForbiddenActionException("You can only view your own appointments");
+        }
+
+        return appointmentMapper.toDetailResponse(appointment);
     }
 
     /**

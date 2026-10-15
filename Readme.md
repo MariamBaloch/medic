@@ -139,6 +139,7 @@ running.
 | PATCH        | `/profile/patient`                                | Update patient profile             | Patient       |
 | PATCH        | `/profile/doctor`                                 | Update doctor profile              | Doctor        |
 | GET          | `/patient/appointments`                           | Get patient appointments           | Patient       |
+| GET          | `/patient/appointments/{appointmentId}`           | Get appointment details            | Patient       |
 | POST         | `/patient/appointments`                           | Book an appointment                | Patient       |
 | PUT          | `/patient/appointments/{id}/cancel`               | Cancel an appointment              | Patient       |
 | GET          | `/patient/appointments/doctors/{id}/availability` | View doctor availability           | Patient       |
