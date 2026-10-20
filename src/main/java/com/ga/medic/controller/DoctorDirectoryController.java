@@ -23,9 +23,13 @@ public class DoctorDirectoryController {
 
     private final DoctorDirectoryService doctorDirectoryService;
 
-    @Operation(summary = "Retrieve active doctors", description = "Returns active doctors, optionally searched by first name, last name, or email")
+    @Operation(summary = "Retrieve active doctors", description = "Returns active doctors, optionally searched by name/email and filtered by specialization or future availability")
     @GetMapping
-    public ResponseEntity<List<UserAccountResponse>> getActiveDoctors(@RequestParam(required = false) String search) {
-        return ResponseEntity.ok(doctorDirectoryService.getActiveDoctors(search));
+    public ResponseEntity<List<UserAccountResponse>> getActiveDoctors(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long specializationId,
+            @RequestParam(required = false) Boolean hasFutureAvailability
+    ) {
+        return ResponseEntity.ok(doctorDirectoryService.getActiveDoctors(search, specializationId, hasFutureAvailability));
     }
 }

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -19,9 +20,15 @@ public class DoctorDirectoryService {
     private final UserMapper userMapper;
 
     @Transactional(readOnly = true)
-    public List<UserAccountResponse> getActiveDoctors(String search) {
-        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
-        return userMapper.toResponses(doctorProfileRepository.findActiveDoctors(UserStatusEnum.ACTIVE, normalizedSearch)
+    public List<UserAccountResponse> getActiveDoctors(String search, Long specializationId, Boolean hasFutureAvailability) {
+        String normalizedSearch = search == null || search.isBlank() ? "" : search.trim();
+        return userMapper.toResponses(doctorProfileRepository.findActiveDoctors(
+                        UserStatusEnum.ACTIVE,
+                        normalizedSearch,
+                        specializationId,
+                        hasFutureAvailability,
+                        LocalDate.now()
+                )
                 .stream()
                 .map(DoctorProfile::getUser)
                 .toList());
