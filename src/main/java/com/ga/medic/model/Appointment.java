@@ -49,6 +49,10 @@ public class Appointment extends Auditable {
     @Column(length = 255)
     private String cancelledReason;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "availability_rule_id")
     private AvailabilityRule availabilityRule;
