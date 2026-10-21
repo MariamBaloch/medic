@@ -82,6 +82,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(ForbiddenActionException.class)
+    public ResponseEntity<ErrorResponse> handleForbiddenAction(ForbiddenActionException ex, HttpServletRequest request) {
+        log.warn("Forbidden action on {}: {}", request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(UsernameNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUsernameNotFoundException(HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, "Invalid email or password", request, null);
