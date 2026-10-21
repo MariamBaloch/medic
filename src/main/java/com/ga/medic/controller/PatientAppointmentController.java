@@ -69,7 +69,7 @@ public class PatientAppointmentController {
 
     @Operation(summary = "Cancel an appointment",
             description = "Cancel an appointment. The freed slot reappears automatically if the current rules still produce it.")
-    @PutMapping("/appointments/{id}/cancel")
+    @PutMapping("/{id}/cancel")
     @AuditLogger(action = AuditAction.CANCEL, entityType = AuditEntityType.APPOINTMENT, description = "Patient cancelled an appointment")
     public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable Long id, @Valid @RequestBody CancelAppointmentRequest request) {
         return ResponseEntity.ok(appointmentService.cancelAppointment(id, request));
