@@ -3,6 +3,9 @@ package com.ga.medic.exception;
 import com.ga.medic.dto.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -26,6 +29,8 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String ACTIVE_APPOINTMENT_SLOT_INDEX = "uq_appointment_active_doctor_slot";
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
@@ -51,6 +56,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SlotNotAvailableException.class)
     public ResponseEntity<ErrorResponse> handleSlotNotAvailableExceptions(SlotNotAvailableException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex,
+                                                                      HttpServletRequest request) {
+        if (violatesActiveAppointmentSlot(ex)) {
+            log.warn("Concurrent appointment slot claim rejected on {}", request.getRequestURI());
+            return build(HttpStatus.CONFLICT, "This appointment slot has just been booked by another patient", request, null);
+        }
+
+        return handleGeneric(ex, request);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(OptimisticLockingFailureException ex,
+                                                                        HttpServletRequest request) {
+        log.warn("Concurrent appointment update rejected on {}", request.getRequestURI());
+        return build(HttpStatus.CONFLICT, "This appointment was updated by another request. Refresh and try again.", request, null);
     }
 
     @ExceptionHandler(InformationNotFoundException.class)
@@ -136,5 +159,16 @@ public class GlobalExceptionHandler {
                 fieldErrors
         );
         return ResponseEntity.status(status).body(body);
+    }
+
+    private boolean violatesActiveAppointmentSlot(Throwable exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation && ACTIVE_APPOINTMENT_SLOT_INDEX.equals(violation.getConstraintName())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 }
