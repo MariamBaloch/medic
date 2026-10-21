@@ -3,11 +3,7 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
-import com.ga.medic.dto.response.AppointmentDetailResponse;
-import com.ga.medic.dto.response.AppointmentResponse;
-import com.ga.medic.dto.response.AppointmentStatusResponse;
-import com.ga.medic.dto.response.AvailableSlotResponse;
-import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.dto.response.*;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
@@ -23,9 +19,11 @@ import com.ga.medic.model.PatientProfile;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.repository.DoctorProfileRepository;
+import com.ga.medic.repository.PatientProfileRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -38,9 +36,11 @@ import static com.ga.medic.specification.AppointmentSpecifications.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final DoctorProfileRepository doctorProfileRepository;
+    private final PatientProfileRepository patientProfileRepository;
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
     private final AppointmentMapper appointmentMapper;
@@ -134,7 +134,15 @@ public class AppointmentService {
      */
     @Transactional
     public AppointmentResponse bookAppointment(AppointmentBookingRequest request) {
-        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
+        PatientProfile authenticatedPatient = authenticatedUser.get().user().getPatientProfile();
+
+        // Lock patient to prevent from booking overlapping appointments at the same time
+        PatientProfile patient = patientProfileRepository.findByIdForUpdate(authenticatedPatient.getId())
+                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+
+        log.info("Booking appointment: patientId={}, doctorId={}, date={}, startTime={}",
+                patient.getId(), request.doctorId(), request.date(), request.startTime());
+
         DoctorProfile doctor = doctorProfileRepository.findById(request.doctorId()).orElseThrow(() -> new InformationNotFoundException("Doctor not found"));
         List<AvailableSlotResponse> availableSlots = availabilityRuleService.getAvailability(doctor.getId(), request.date(), request.date());
 
@@ -160,7 +168,12 @@ public class AppointmentService {
         }
 
         Appointment appointment = appointmentMapper.toEntity(request, doctor, patient, rule, endTime);
-        appointment = appointmentRepository.save(appointment);
+
+        // Flush here so the database's unique active-slot index rejects concurrent requests
+        appointment = appointmentRepository.saveAndFlush(appointment);
+
+        log.info("Appointment booked: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
+                appointment.getId(), patient.getId(), doctor.getId(), request.date(), request.startTime());
 
         notificationService.createAndSend(doctor.getUser(), NotificationType.APPOINTMENT, NotificationAction.BOOKED,
                 "New Appointment Booking",
