@@ -12,7 +12,7 @@ import java.time.LocalTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "appointment", uniqueConstraints = @UniqueConstraint(name = "uc_appointment_doctor_date_time", columnNames = {"doctor_id", "appointment_date", "start_time"}))
+@Table(name = "appointment")
 public class Appointment extends Auditable {
 
     @Id
