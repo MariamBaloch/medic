@@ -13,6 +13,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.Optional;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@Profile("!test & !integration")
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
