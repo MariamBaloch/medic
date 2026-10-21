@@ -85,6 +85,7 @@ public class AppointmentServiceTest {
 
         when(authenticatedUser.get()).thenReturn(userDetails);
         when(userDetails.user()).thenReturn(patientUser);
+        when(patientProfileRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(patient));
     }
 
     @Test(expected = InformationNotFoundException.class)
@@ -123,11 +124,12 @@ public class AppointmentServiceTest {
         when(appointmentRepository.existsOverlappingForPatient(any(), any(), any(), any())).thenReturn(false);
         when(appointmentRepository.existsActiveByDoctorAndSlot(any(), any(), any())).thenReturn(false);
         when(appointmentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(appointment);
-        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(appointment)).thenReturn(appointment);
 
         appointmentService.bookAppointment(request);
 
-        verify(appointmentRepository).save(appointment);
+        verify(patientProfileRepository).findByIdForUpdate(1L);
+        verify(appointmentRepository).saveAndFlush(appointment);
     }
 
 
