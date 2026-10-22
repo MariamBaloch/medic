@@ -1,4 +1,4 @@
-package com.ga.medic.controller;
+package com.ga.medic.integration.appointment;
 
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.exception.GlobalExceptionHandler;
