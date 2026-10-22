@@ -38,6 +38,7 @@ public interface AppointmentMapper {
     @Mapping(target = "doctorQualification", source = "doctor.qualification")
     @Mapping(target = "patientId", source = "patient.id")
     @Mapping(target = "patientName", source = "patient.user.fullName")
+    @Mapping(target = "version", source = "version")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
     AppointmentResponse toResponse(Appointment appointment);
@@ -53,6 +54,7 @@ public interface AppointmentMapper {
     @Mapping(target = "doctorClinicAddress", source = "doctor.clinicAddress")
     @Mapping(target = "doctorLicenseNumber", source = "doctor.licenseNumber")
     @Mapping(target = "doctorBio", source = "doctor.bio")
+    @Mapping(target = "version", source = "version")
     AppointmentDetailResponse toDetailResponse(Appointment appointment);
 
     @Mapping(target = "value", source = "status")

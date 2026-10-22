@@ -3,6 +3,7 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
+import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.*;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.NotificationAction;
@@ -27,10 +28,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Objects;
 
 import static com.ga.medic.specification.AppointmentSpecifications.*;
 
@@ -183,6 +187,100 @@ public class AppointmentService {
                         + " to " + endTime + ".",
                 false, appointment.getId()
         );
+
+        return appointmentMapper.toResponse(appointment);
+    }
+
+    /**
+     * Reschedules one future appointment owned by the authenticated patient to another dynamically generated slot.
+     * The existing appointment row is updated atomically; a failed move leaves its original slot unchanged.
+     *
+     * @param appointmentId the appointment being moved
+     * @param request       the requested date, start time, and version last observed by the patient
+     * @return the updated appointment, including its new version
+     */
+    @Transactional
+    public AppointmentResponse rescheduleAppointment(Long appointmentId, RescheduleAppointmentRequest request) {
+        PatientProfile authenticatedPatient = authenticatedUser.get().user().getPatientProfile();
+        if (authenticatedPatient == null) {
+            throw new InformationNotFoundException("Patient profile not found");
+        }
+
+        // Lock patient to prevent from rescheduling overlapping appointments at the same time
+        PatientProfile patient = patientProfileRepository.findByIdForUpdate(authenticatedPatient.getId())
+                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
+
+        if (!appointment.getPatient().getId().equals(patient.getId())) {
+            throw new ForbiddenActionException("You can only reschedule your own appointments");
+        }
+        if (appointment.getStatus() != AppointmentStatusEnum.BOOKED) {
+            throw new IllegalArgumentException("Only booked appointments can be rescheduled");
+        }
+
+        LocalDate today = LocalDate.now();
+        if (appointment.getAppointmentDate().isBefore(today)
+                || (appointment.getAppointmentDate().equals(today)
+                && !appointment.getStartTime().isAfter(LocalTime.now()))) {
+            throw new IllegalArgumentException("Only future appointments can be rescheduled");
+        }
+
+        // Check for optimistic locking conflict to prevent overwriting concurrent updates.
+        if (!Objects.equals(appointment.getVersion(), request.expectedVersion())) {
+            throw new ObjectOptimisticLockingFailureException(Appointment.class, appointmentId);
+        }
+
+        if (appointment.getAppointmentDate().equals(request.date())
+                && appointment.getStartTime().equals(request.startTime())) {
+            return appointmentMapper.toResponse(appointment);
+        }
+
+        DoctorProfile doctor = appointment.getDoctor();
+        log.info("Rescheduling appointment: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
+                appointmentId, patient.getId(), doctor.getId(), appointment.getAppointmentDate(),
+                appointment.getStartTime(), request.date(), request.startTime());
+
+        AvailableSlotResponse targetSlot = availabilityRuleService
+                .getAvailability(doctor.getId(), request.date(), request.date(), appointmentId)
+                .stream()
+                .filter(slot -> slot.date().equals(request.date()) && slot.startTime().equals(request.startTime()))
+                .findFirst()
+                .orElseThrow(() -> new SlotNotAvailableException(
+                        "The requested slot on " + request.date() + " at " + request.startTime()
+                                + " is not available. It may have been booked, is in the past, or does not match the doctor's schedule."));
+
+        if (appointmentRepository.existsOverlappingForPatientExcludingAppointment(
+                patient.getId(), request.date(), targetSlot.startTime(), targetSlot.endTime(), appointmentId)) {
+            throw new SlotNotAvailableException("You already have an overlapping appointment at this time");
+        }
+
+        AvailabilityRule rule = availabilityRuleRepository.findById(targetSlot.ruleId())
+                .orElseThrow(() -> new InformationNotFoundException("Availability rule with id " + targetSlot.ruleId() + " not found"));
+
+        LocalDate oldDate = appointment.getAppointmentDate();
+        LocalTime oldStartTime = appointment.getStartTime();
+        appointment.setAppointmentDate(targetSlot.date());
+        appointment.setStartTime(targetSlot.startTime());
+        appointment.setEndTime(targetSlot.endTime());
+        appointment.setAvailabilityRule(rule);
+        appointment = appointmentRepository.saveAndFlush(appointment);
+
+        log.info("Appointment rescheduled: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
+                appointment.getId(), patient.getId(), doctor.getId(), oldDate, oldStartTime,
+                appointment.getAppointmentDate(), appointment.getStartTime());
+
+        notificationService.createAndSend(patient.getUser(), NotificationType.APPOINTMENT,
+                NotificationAction.RESCHEDULED, "Appointment Rescheduled",
+                "Your appointment with " + doctor.getUser().getFullName() + " has been rescheduled to "
+                        + appointment.getAppointmentDate() + " at " + appointment.getStartTime() + ".",
+                false, appointment.getId());
+
+        notificationService.createAndSend(doctor.getUser(), NotificationType.APPOINTMENT,
+                NotificationAction.RESCHEDULED, "Patient Rescheduled Appointment",
+                patient.getUser().getFullName() + " rescheduled their appointment to "
+                        + appointment.getAppointmentDate() + " at " + appointment.getStartTime() + ".",
+                false, appointment.getId());
 
         return appointmentMapper.toResponse(appointment);
     }
