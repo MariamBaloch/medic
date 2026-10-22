@@ -168,7 +168,7 @@ public class AvailabilityRuleService {
     public DoctorCalendarResponse getCalendar(LocalDate from, LocalDate to) {
         DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
 
-        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to);
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to, null);
 
         List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctor.getId(), from, to);
 
@@ -185,10 +185,20 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to) {
+        return getAvailability(doctorId, from, to, null);
+    }
+
+    /**
+     * Returns dynamically calculated available slots, optionally ignoring one existing appointment.
+     * The exclusion is used when validating a reschedule so the appointment does not block its own target slot.
+     */
+    @Transactional
+    public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to,
+                                                       Long excludedAppointmentId) {
         if (!doctorProfileRepository.existsById(doctorId)) {
             throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
         }
-        return computeAvailableSlots(doctorId, from, to);
+        return computeAvailableSlots(doctorId, from, to, excludedAppointmentId);
     }
 
     /**
@@ -244,7 +254,8 @@ public class AvailabilityRuleService {
      * @param to       the last date to include
      * @return sorted available slots in the date range
      */
-    private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to) {
+    private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to,
+                                                               Long excludedAppointmentId) {
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();
 
@@ -253,7 +264,10 @@ public class AvailabilityRuleService {
         List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
 
         // Store appointment keys for quick lookup
-        Set<String> appointmentKeys = appointments.stream().map(a -> a.getAppointmentDate() + "|" + a.getStartTime()).collect(Collectors.toSet());
+        Set<String> appointmentKeys = appointments.stream()
+                .filter(appointment -> !Objects.equals(appointment.getId(), excludedAppointmentId))
+                .map(appointment -> appointment.getAppointmentDate() + "|" + appointment.getStartTime())
+                .collect(Collectors.toSet());
 
         // Tracks slots already added to results. Prevents the same slot appearing twice in case two overlapping rules generate it
         Set<SlotKey> seenSlots = new HashSet<>();
