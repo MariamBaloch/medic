@@ -65,6 +65,12 @@ public class PatientAppointmentController {
     @PostMapping
     @Operation(summary = "Book an appointment",
             description = "Book an appointment with a doctor. The system validates the slot is truly available against current rules and prevents double-booking.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Appointment booked"),
+            @ApiResponse(responseCode = "400", description = "Invalid booking request or appointment data"),
+            @ApiResponse(responseCode = "403", description = "Patient role required"),
+            @ApiResponse(responseCode = "409", description = "Slot is unavailable, overlaps a patient booking, or was claimed concurrently")
+    })
     @AuditLogger(action = AuditAction.BOOK, entityType = AuditEntityType.APPOINTMENT, description = "Patient booked an appointment")
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentBookingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.bookAppointment(request));
