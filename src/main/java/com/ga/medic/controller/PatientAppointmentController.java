@@ -4,6 +4,7 @@ import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
+import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
@@ -14,6 +15,8 @@ import com.ga.medic.service.AppointmentService;
 import com.ga.medic.service.AvailabilityRuleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,6 +68,25 @@ public class PatientAppointmentController {
     @AuditLogger(action = AuditAction.BOOK, entityType = AuditEntityType.APPOINTMENT, description = "Patient booked an appointment")
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentBookingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.bookAppointment(request));
+    }
+
+    @PutMapping("/{appointmentId}/reschedule")
+    @Operation(summary = "Reschedule an appointment",
+            description = "Moves the authenticated patient's future booked appointment to another currently available slot with the same doctor. The request must include the appointment version last read by the patient.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment rescheduled"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or appointment cannot be rescheduled"),
+            @ApiResponse(responseCode = "403", description = "Appointment belongs to another patient"),
+            @ApiResponse(responseCode = "404", description = "Appointment or patient profile not found"),
+            @ApiResponse(responseCode = "409", description = "Version is stale or target slot is unavailable")
+    })
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.APPOINTMENT,
+            description = "Patient rescheduled an appointment")
+    public ResponseEntity<AppointmentResponse> rescheduleAppointment(
+            @Parameter(description = "Appointment ID") @PathVariable Long appointmentId,
+            @Valid @RequestBody RescheduleAppointmentRequest request
+    ) {
+        return ResponseEntity.ok(appointmentService.rescheduleAppointment(appointmentId, request));
     }
 
     @Operation(summary = "Cancel an appointment",
