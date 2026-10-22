@@ -13,6 +13,9 @@ import java.time.LocalTime;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record AppointmentDetailResponse(
 
+        @Schema(description = "Optimistic-lock version; send this value when rescheduling", example = "0")
+        Long version,
+
         @Schema(description = "Date of the appointment", example = "05/10/2026")
         @JsonFormat(pattern = "dd/MM/yyyy")
         LocalDate appointmentDate,

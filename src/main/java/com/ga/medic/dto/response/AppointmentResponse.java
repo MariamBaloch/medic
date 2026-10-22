@@ -16,6 +16,9 @@ public record AppointmentResponse(
         @Schema(description = "Appointment ID", example = "1")
         Long id,
 
+        @Schema(description = "Optimistic-lock version; send this value when rescheduling", example = "0")
+        Long version,
+
         @Schema(description = "Doctor profile ID", example = "1")
         Long doctorId,
 
