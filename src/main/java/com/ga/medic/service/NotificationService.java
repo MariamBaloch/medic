@@ -3,19 +3,28 @@ package com.ga.medic.service;
 import com.ga.medic.dto.response.NotificationResponse;
 import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
+import com.ga.medic.event.NotificationDispatchEvent;
 import com.ga.medic.mapper.NotificationMapper;
 import com.ga.medic.model.Notification;
 import com.ga.medic.model.User;
 import com.ga.medic.repository.NotificationRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 
 @Slf4j
 @Service
@@ -25,6 +34,9 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
+    private final ApplicationEventPublisher eventPublisher;
+    @Qualifier("notificationEmailExecutor")
+    private final ExecutorService notificationEmailExecutor;
     // Map to hold userId and all active SseEmitters for that user for multiple connections
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
@@ -59,7 +71,6 @@ public class NotificationService {
      */
     public void sendNotification(Long userId, NotificationResponse notification) {
         Set<SseEmitter> userEmitters = emitters.get(userId);
-        log.info("Sending notification to userId {}: {}", userId, notification);
 
         if (userEmitters == null) {
             return;
@@ -68,8 +79,10 @@ public class NotificationService {
         for (SseEmitter emitter : userEmitters) {
             try {
                 emitter.send(SseEmitter.event().name("notification").data(notification));
-                log.info("Notification sent to userId {}: {}", userId, notification);
-            } catch (IOException e) {
+                log.debug("SSE notification sent: userId={}, notificationId={}", userId, notification.id());
+            } catch (IOException | RuntimeException exception) {
+                log.warn("Removing failed SSE connection: userId={}, notificationId={}",
+                        userId, notification.id(), exception);
                 removeEmitter(userId, emitter);
             }
         }
@@ -94,7 +107,7 @@ public class NotificationService {
     }
 
     /**
-     * Persists a notification before delivering it to the user's active event-stream connections.
+     * Persists a notification in the caller's transaction and schedules delivery after commit.
      *
      * @param user the notification recipient
      * @param type the notification category
@@ -104,33 +117,52 @@ public class NotificationService {
      * @param read whether the notification is initially marked as read
      * @param relatedEntityId the ID of the related entity, if any
      */
-    public void createAndSend(User user, NotificationType type, NotificationAction action, String title, String message, boolean read, Long relatedEntityId
-    ) {
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void createAndSend(User user, NotificationType type, NotificationAction action, String title,
+                              String message, boolean read, Long relatedEntityId) {
         Notification notification = notificationMapper.toNotification(user, type, action, title, message, read, relatedEntityId);
-        notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
         NotificationResponse response = notificationMapper.toResponse(notification);
-        sendNotification(user.getId(), response);
-        sendEmailNotification(user, type, action, title, message, relatedEntityId);
+        eventPublisher.publishEvent(new NotificationDispatchEvent(
+                user.getId(), user.getEmail(), user.getFullName(), response
+        ));
     }
 
-    private void sendEmailNotification(User user, NotificationType type, NotificationAction action, String title,
-                                       String message, Long relatedEntityId) {
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void dispatchAfterCommit(NotificationDispatchEvent event) {
+        sendNotification(event.userId(), event.notification());
+
+        try {
+            notificationEmailExecutor.execute(() -> sendEmailNotification(event));
+            log.info("Submitted notification email: notificationId={}, userId={}",
+                    event.notification().id(), event.userId());
+        } catch (RejectedExecutionException exception) {
+            log.error("Could not submit notification email: notificationId={}, userId={}",
+                    event.notification().id(), event.userId(), exception);
+        }
+    }
+
+    private void sendEmailNotification(NotificationDispatchEvent event) {
+        NotificationResponse notification = event.notification();
         try {
             emailService.sendTemplateEmail(
-                    user.getEmail(),
-                    title,
+                    event.recipientEmail(),
+                    notification.title(),
                     "email/notification",
                     Map.of(
-                            "fullName", user.getFullName(),
-                            "title", title,
-                            "message", message,
-                            "type", type,
-                            "action", action,
-                            "relatedEntityId", relatedEntityId == null ? "" : relatedEntityId
+                            "fullName", event.recipientName(),
+                            "title", notification.title(),
+                            "message", notification.message(),
+                            "type", notification.type(),
+                            "action", notification.action(),
+                            "relatedEntityId", notification.relatedEntityId() == null
+                                    ? "" : notification.relatedEntityId()
                     )
             );
-        } catch (RuntimeException e) {
-            log.warn("Failed to send email notification to userId {}", user.getId(), e);
+            log.info("Notification email sent: notificationId={}, userId={}", notification.id(), event.userId());
+        } catch (RuntimeException exception) {
+            log.warn("Notification email failed: notificationId={}, userId={}",
+                    notification.id(), event.userId(), exception);
         }
     }
 }
