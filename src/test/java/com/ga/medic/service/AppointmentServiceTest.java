@@ -2,8 +2,10 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
+import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
@@ -19,6 +21,7 @@ import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -130,6 +133,128 @@ public class AppointmentServiceTest {
 
         verify(patientProfileRepository).findByIdForUpdate(1L);
         verify(appointmentRepository).saveAndFlush(appointment);
+    }
+
+    @Test
+    public void rescheduleAppointment_shouldUpdateExistingAppointment_whenTargetSlotIsAvailable() {
+        Long appointmentId = 10L;
+        LocalDate newDate = DATE.plusDays(1);
+        LocalTime newStartTime = LocalTime.of(10, 0);
+        LocalTime newEndTime = LocalTime.of(10, 30);
+        AvailabilityRule targetRule = new AvailabilityRule();
+        targetRule.setId(3L);
+
+        Appointment appointment = new Appointment();
+        appointment.setId(appointmentId);
+        appointment.setPatient(patient);
+        appointment.setDoctor(doctor);
+        appointment.setAvailabilityRule(new AvailabilityRule());
+        appointment.setAppointmentDate(DATE);
+        appointment.setStartTime(START);
+        appointment.setEndTime(END);
+        appointment.setStatus(AppointmentStatusEnum.BOOKED);
+        appointment.setVersion(0L);
+
+        AvailableSlotResponse targetSlot = new AvailableSlotResponse(
+                targetRule.getId(), newDate, newStartTime, newEndTime, 30);
+        RescheduleAppointmentRequest request = new RescheduleAppointmentRequest(newDate, newStartTime, 0L);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(availabilityRuleService.getAvailability(doctor.getId(), newDate, newDate, appointmentId))
+                .thenReturn(List.of(targetSlot));
+        when(appointmentRepository.existsOverlappingForPatientExcludingAppointment(
+                patient.getId(), newDate, newStartTime, newEndTime, appointmentId)).thenReturn(false);
+        when(availabilityRuleRepository.findById(targetRule.getId())).thenReturn(Optional.of(targetRule));
+        when(appointmentRepository.saveAndFlush(appointment)).thenReturn(appointment);
+
+        appointmentService.rescheduleAppointment(appointmentId, request);
+
+        assertEquals(newDate, appointment.getAppointmentDate());
+        assertEquals(newStartTime, appointment.getStartTime());
+        assertEquals(newEndTime, appointment.getEndTime());
+        assertEquals(targetRule, appointment.getAvailabilityRule());
+        verify(appointmentRepository).saveAndFlush(appointment);
+        verify(notificationService, times(2)).createAndSend(
+                any(), eq(com.ga.medic.enums.NotificationType.APPOINTMENT),
+                eq(com.ga.medic.enums.NotificationAction.RESCHEDULED),
+                anyString(), anyString(), eq(false), eq(appointmentId));
+    }
+
+    @Test(expected = SlotNotAvailableException.class)
+    public void rescheduleAppointment_shouldKeepOriginalSlot_whenTargetIsUnavailable() {
+        Long appointmentId = 10L;
+        LocalDate targetDate = DATE.plusDays(1);
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        LocalDate originalDate = appointment.getAppointmentDate();
+        LocalTime originalStartTime = appointment.getStartTime();
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(availabilityRuleService.getAvailability(doctor.getId(), targetDate, targetDate, appointmentId))
+                .thenReturn(List.of());
+
+        try {
+            appointmentService.rescheduleAppointment(
+                    appointmentId,
+                    new RescheduleAppointmentRequest(targetDate, LocalTime.of(10, 0), 0L));
+        } finally {
+            assertEquals(originalDate, appointment.getAppointmentDate());
+            assertEquals(originalStartTime, appointment.getStartTime());
+            verify(appointmentRepository, never()).saveAndFlush(any());
+        }
+    }
+
+    @Test(expected = ForbiddenActionException.class)
+    public void rescheduleAppointment_shouldRejectAppointmentOwnedByAnotherPatient() {
+        Long appointmentId = 10L;
+        User otherPatientUser = new User();
+        otherPatientUser.setId(2L);
+        PatientProfile otherPatient = new PatientProfile();
+        otherPatient.setId(2L);
+        otherPatient.setUser(otherPatientUser);
+
+        Appointment appointment = createBookedAppointment(appointmentId, otherPatient, 0L);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rescheduleAppointment_shouldRejectCancelledAppointment() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        appointment.setStatus(AppointmentStatusEnum.CANCELLED);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    @Test(expected = ObjectOptimisticLockingFailureException.class)
+    public void rescheduleAppointment_shouldRejectStaleVersion() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 1L);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    private Appointment createBookedAppointment(Long appointmentId, PatientProfile owner, Long version) {
+        Appointment appointment = new Appointment();
+        appointment.setId(appointmentId);
+        appointment.setPatient(owner);
+        appointment.setDoctor(doctor);
+        appointment.setAppointmentDate(DATE);
+        appointment.setStartTime(START);
+        appointment.setEndTime(END);
+        appointment.setStatus(AppointmentStatusEnum.BOOKED);
+        appointment.setVersion(version);
+        return appointment;
     }
 
 
