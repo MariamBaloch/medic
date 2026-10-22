@@ -123,43 +123,55 @@ running.
 
 ### API Endpoints
 
-| Request Type | URL                                               | Functionality                      | Access        |
-|--------------|---------------------------------------------------|------------------------------------|---------------|
-| POST         | `/auth/users/login`                               | User login                         | Public        |
-| POST         | `/auth/users/register/patient`                    | Patient registration               | Public        |
-| POST         | `/auth/users/register/doctor`                     | Doctor registration                | Public        |
-| POST         | `/auth/users/register/admin`                      | Admin registration                 | Admin         |
-| GET          | `/auth/users/verify`                              | Verify email address               | Public        |
-| POST         | `/auth/users/forgot-password`                     | Request password reset             | Public        |
-| POST         | `/auth/users/reset-password`                      | Reset password                     | Public        |
-| POST         | `/auth/users/change-password`                     | Change password                    | Authenticated |
-| POST         | `/auth/users/logout`                              | User logout                        | Authenticated |
-| GET          | `/user`                                           | Retrieve user account              | Authenticated |
-| PATCH        | `/user/avatar`                                    | Upload profile picture             | Authenticated |
-| PATCH        | `/profile/patient`                                | Update patient profile             | Patient       |
-| PATCH        | `/profile/doctor`                                 | Update doctor profile              | Doctor        |
-| GET          | `/patient/appointments`                           | Get patient appointments           | Patient       |
-| GET          | `/patient/appointments/{appointmentId}`           | Get appointment details            | Patient       |
-| POST         | `/patient/appointments`                           | Book an appointment                | Patient       |
-| PUT          | `/patient/appointments/{appointmentId}/reschedule`| Reschedule a future appointment    | Patient       |
-| PUT          | `/patient/appointments/{id}/cancel`               | Cancel an appointment              | Patient       |
-| GET          | `/patient/appointments/doctors/{id}/availability` | View doctor availability           | Patient       |
-| GET          | `/doctors/appointments`                           | Get doctor appointment history     | Doctor        |
-| PATCH        | `/doctors/appointments/{appointmentId}/status`    | Update appointment outcome         | Doctor        |
-| GET          | `/appointments/statuses`                          | List appointment statuses          | Authenticated |
-| GET          | `/doctors/availability/calendar`                  | Get doctor calendar                | Doctor        |
-| GET          | `/doctors/availability/rules`                     | List availability rules            | Doctor        |
-| POST         | `/doctors/availability/rules`                     | Create availability rule           | Doctor        |
-| PUT          | `/doctors/availability/rules/{id}`                | Update availability rule           | Doctor        |
-| DELETE       | `/doctors/availability/rules/{id}`                | Delete availability rule           | Doctor        |
-| GET          | `/doctors/availability/exceptions`                | List availability exceptions       | Doctor        |
-| POST         | `/doctors/availability/exceptions`                | Create availability exception      | Doctor        |
-| PUT          | `/doctors/availability/exceptions/{id}`           | Update availability exception      | Doctor        |
-| DELETE       | `/doctors/availability/exceptions/{id}`           | Delete availability exception      | Doctor        |
-| GET          | `/notifications/subscribe`                        | Connect to real-time notifications | Authenticated |
-| PATCH        | `/admin/doctors/{id}/verify`                      | Verify a doctor profile            | Admin         |
-| DELETE       | `/admin/users/{userId}`                           | Soft delete a user                 | Admin         |
-| GET          | `/audit-logs`                                     | Get all audit logs                 | Authenticated |
+| Request Type | URL                                                | Functionality                      | Access        |
+|--------------|----------------------------------------------------|------------------------------------|---------------|
+| POST         | `/auth/users/login`                                | User login                         | Public        |
+| POST         | `/auth/users/register/patient`                     | Patient registration               | Public        |
+| POST         | `/auth/users/register/doctor`                      | Doctor registration                | Public        |
+| POST         | `/auth/users/register/admin`                       | Admin registration                 | Admin         |
+| GET          | `/auth/users/verify`                               | Verify email address               | Public        |
+| POST         | `/auth/users/forgot-password`                      | Request password reset             | Public        |
+| POST         | `/auth/users/reset-password`                       | Reset password                     | Public        |
+| POST         | `/auth/users/change-password`                      | Change password                    | Authenticated |
+| POST         | `/auth/users/logout`                               | User logout                        | Authenticated |
+| GET          | `/user`                                            | Retrieve user account              | Authenticated |
+| PATCH        | `/user/avatar`                                     | Upload profile picture             | Authenticated |
+| PATCH        | `/profile/patient`                                 | Update patient profile             | Patient       |
+| PATCH        | `/profile/doctor`                                  | Update doctor profile              | Doctor        |
+| GET          | `/patient/appointments`                            | Get patient appointments           | Patient       |
+| GET          | `/patient/appointments/{appointmentId}`            | Get appointment details            | Patient       |
+| POST         | `/patient/appointments`                            | Book an appointment                | Patient       |
+| PUT          | `/patient/appointments/{appointmentId}/reschedule` | Reschedule a future appointment    | Patient       |
+| PUT          | `/patient/appointments/{id}/cancel`                | Cancel an appointment              | Patient       |
+| GET          | `/patient/appointments/doctors/{id}/availability`  | View doctor availability           | Patient       |
+| GET          | `/doctors/appointments`                            | Get doctor appointment history     | Doctor        |
+| PATCH        | `/doctors/appointments/{appointmentId}/status`     | Update appointment outcome         | Doctor        |
+| GET          | `/appointments/statuses`                           | List appointment statuses          | Authenticated |
+| GET          | `/doctors/availability/calendar`                   | Get doctor calendar                | Doctor        |
+| GET          | `/doctors/availability/rules`                      | List availability rules            | Doctor        |
+| POST         | `/doctors/availability/rules`                      | Create availability rule           | Doctor        |
+| PUT          | `/doctors/availability/rules/{id}`                 | Update availability rule           | Doctor        |
+| DELETE       | `/doctors/availability/rules/{id}`                 | Delete availability rule           | Doctor        |
+| GET          | `/doctors/availability/exceptions`                 | List availability exceptions       | Doctor        |
+| POST         | `/doctors/availability/exceptions`                 | Create availability exception      | Doctor        |
+| PUT          | `/doctors/availability/exceptions/{id}`            | Update availability exception      | Doctor        |
+| DELETE       | `/doctors/availability/exceptions/{id}`            | Delete availability exception      | Doctor        |
+| GET          | `/notifications/subscribe`                         | Connect to real-time notifications | Authenticated |
+| PATCH        | `/admin/doctors/{id}/verify`                       | Verify a doctor profile            | Admin         |
+| DELETE       | `/admin/users/{userId}`                            | Soft delete a user                 | Admin         |
+| GET          | `/audit-logs`                                      | Get all audit logs                 | Authenticated |
+
+### Appointment notification delivery
+
+Appointment notifications are saved in the same transaction as the booking, rescheduling, or cancellation. After the
+transaction commits, Medic sends real-time updates through SSE and schedules emails using a thread pool (2 core threads,
+up to 4, with a queue for 100 tasks).
+
+If an email fails, the error is logged and the appointment remains saved. If the email system is too busy, the request
+thread may send the email itself, which can delay the response.
+
+Emails are not stored in a separate queue for retry. If the application stops after the transaction commits but before
+the email is scheduled, the email may be lost, but the appointment and notification remain saved.
 
 ## Installation
 
