@@ -1,6 +1,7 @@
 package com.ga.medic.service;
 
 import com.ga.medic.config.Constants;
+import com.ga.medic.dto.request.UserAccountUpdateRequest;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.exception.InformationNotFoundException;
@@ -69,6 +70,27 @@ public class UserService {
                 .findById(userId)
                 .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
         return userMapper.toResponse(user);
+    }
+
+    /**
+     * Updates editable details on the authenticated user's account without changing the email or account role.
+     *
+     * @param request the editable account fields
+     * @return the updated user account response
+     */
+    @Transactional
+    public UserAccountResponse updateUserAccount(UserAccountUpdateRequest request) {
+        Long userId = authenticatedUser.getUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPhone(request.phone());
+        user.setGender(request.gender());
+
+        return userMapper.toResponse(userRepository.save(user));
     }
 
     /**

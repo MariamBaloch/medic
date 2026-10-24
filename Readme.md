@@ -135,6 +135,7 @@ running.
 | POST         | `/auth/users/change-password`                      | Change password                    | Authenticated |
 | POST         | `/auth/users/logout`                               | User logout                        | Authenticated |
 | GET          | `/user`                                            | Retrieve user account              | Authenticated |
+| PUT          | `/user`                                            | Update user account details        | Authenticated |
 | PATCH        | `/user/avatar`                                     | Upload profile picture             | Authenticated |
 | PATCH        | `/profile/patient`                                 | Update patient profile             | Patient       |
 | PATCH        | `/profile/doctor`                                  | Update doctor profile              | Doctor        |
