@@ -5,6 +5,7 @@ import com.ga.medic.model.Appointment;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
+import java.util.Locale;
 
 public class AppointmentSpecifications {
 
@@ -16,14 +17,32 @@ public class AppointmentSpecifications {
         return (root, query, cb) -> cb.equal(root.get("patient").get("id"), patientId);
     }
 
-    public static Specification<Appointment> withOptionalDoctor(Long doctorId) {
-        return (root, query, cb) -> doctorId == null ? null
-                : cb.equal(root.get("doctor").get("id"), doctorId);
+    public static Specification<Appointment> withOptionalDoctorName(String doctorName) {
+        return (root, query, cb) -> {
+            if (doctorName == null || doctorName.isBlank()) {
+                return null;
+            }
+
+            String search = "%" + doctorName.trim().toLowerCase(Locale.ROOT) + "%";
+            var fullName = cb.concat(
+                    cb.concat(root.get("doctor").get("user").<String>get("firstName"), " "),
+                    root.get("doctor").get("user").<String>get("lastName"));
+            return cb.like(cb.lower(fullName), search);
+        };
     }
 
-    public static Specification<Appointment> withOptionalPatient(Long patientId) {
-        return (root, query, cb) -> patientId == null ? null
-                : cb.equal(root.get("patient").get("id"), patientId);
+    public static Specification<Appointment> withOptionalPatientName(String patientName) {
+        return (root, query, cb) -> {
+            if (patientName == null || patientName.isBlank()) {
+                return null;
+            }
+
+            String search = "%" + patientName.trim().toLowerCase(Locale.ROOT) + "%";
+            var fullName = cb.concat(
+                    cb.concat(root.get("patient").get("user").<String>get("firstName"), " "),
+                    root.get("patient").get("user").<String>get("lastName"));
+            return cb.like(cb.lower(fullName), search);
+        };
     }
 
     public static Specification<Appointment> fromDate(LocalDate dateFrom) {

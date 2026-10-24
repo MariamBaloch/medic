@@ -3,9 +3,11 @@ package com.ga.medic.controller;
 import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
+import com.ga.medic.dto.request.AppointmentStatusCountFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
+import com.ga.medic.dto.response.AppointmentStatusCountsResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AuditAction;
@@ -45,12 +47,23 @@ public class PatientAppointmentController {
 
     @GetMapping
     @Operation(summary = "Get my appointments",
-            description = "Lists the authenticated patient's appointments with optional doctor, date-range, status, and specialization filters.")
+            description = "Lists the authenticated patient's appointments with optional doctor-name, date-range, status, and specialization filters.")
     public ResponseEntity<PageResponse<AppointmentResponse>> getMyAppointments(
-            @Parameter(description = "Doctor profile ID") @RequestParam(required = false) Long doctorId,
+            @Parameter(description = "Case-insensitive partial match against the doctor's full name")
+            @RequestParam(required = false) String doctorName,
             @ParameterObject AppointmentFilterRequest filters,
             @ParameterObject @PageableDefault(sort = {"appointmentDate", "startTime"}, direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(appointmentService.getPatientAppointments(doctorId, filters, pageable));
+        return ResponseEntity.ok(appointmentService.getPatientAppointments(doctorName, filters, pageable));
+    }
+
+    @GetMapping("/status-counts")
+    @Operation(summary = "Get my appointment counts by status",
+            description = "Counts the authenticated patient's appointments by status, with optional doctor-name, date-range, and specialization filters.")
+    public ResponseEntity<AppointmentStatusCountsResponse> getMyAppointmentStatusCounts(
+            @Parameter(description = "Case-insensitive partial match against the doctor's full name")
+            @RequestParam(required = false) String doctorName,
+            @ParameterObject AppointmentStatusCountFilterRequest filters) {
+        return ResponseEntity.ok(appointmentService.getPatientAppointmentStatusCounts(doctorName, filters));
     }
 
     @PostMapping

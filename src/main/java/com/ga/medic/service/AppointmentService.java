@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
+import com.ga.medic.dto.request.AppointmentStatusCountFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.*;
@@ -30,7 +31,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static com.ga.medic.specification.AppointmentSpecifications.*;
@@ -52,26 +55,38 @@ public class AppointmentService {
     /**
      * Returns the authenticated patient's appointments with optional filters and pagination.
      *
-     * @param doctorId optional doctor ID to filter by
+     * @param doctorName optional case-insensitive partial match against the doctor's full name
      * @param filters  optional date and status filters
      * @param pageable pagination and sorting information
      * @return the requested page of appointment responses
      */
     @Transactional
-    public PageResponse<AppointmentResponse> getPatientAppointments(Long doctorId, AppointmentFilterRequest filters,
-                                                                    Pageable pageable) {
+    public PageResponse<AppointmentResponse> getPatientAppointments(String doctorName, AppointmentFilterRequest filters,
+                                                                     Pageable pageable) {
         PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
 
-        Specification<Appointment> spec = Specification
-                .where(forPatient(patient.getId()))
-                .and(withOptionalDoctor(doctorId))
-                .and(fromDate(filters.getDateFrom()))
-                .and(toDate(filters.getDateTo()))
-                .and(withStatus(filters.getStatus()))
-                .and(withSpecialization(filters.getSpecializationId()));
+        Specification<Appointment> spec = patientAppointmentFilters(
+                patient.getId(), doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
+                .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+    }
+
+    /**
+     * Returns counts by status for the authenticated patient's matching appointments.
+     *
+     * @param doctorName optional case-insensitive partial match against the doctor's full name
+     * @param filters optional date range and specialization filters
+     * @return total and per-status counts, including zero counts
+     */
+    @Transactional
+    public AppointmentStatusCountsResponse getPatientAppointmentStatusCounts(
+            String doctorName, AppointmentStatusCountFilterRequest filters) {
+        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
+        Specification<Appointment> specification = patientAppointmentFilters(
+                patient.getId(), doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
+        return toStatusCounts(appointmentRepository.countByStatus(specification));
     }
 
     /**
@@ -98,25 +113,67 @@ public class AppointmentService {
     /**
      * Returns the authenticated doctor's appointments with optional filters and pagination.
      *
-     * @param patientId optional patient ID to filter by
+     * @param patientName optional case-insensitive partial match against the patient's full name
      * @param filters   optional date and status filters
      * @param pageable  pagination and sorting information
      * @return the requested page of appointment responses
      */
     @Transactional
-    public PageResponse<AppointmentResponse> getDoctorAppointments(Long patientId, AppointmentFilterRequest filters,
+    public PageResponse<AppointmentResponse> getDoctorAppointments(String patientName, AppointmentFilterRequest filters,
                                                                    Pageable pageable) {
         DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
-        Specification<Appointment> spec = Specification
-                .where(forDoctor(doctor.getId()))
-                .and(withOptionalPatient(patientId))
-                .and(fromDate(filters.getDateFrom()))
-                .and(toDate(filters.getDateTo()))
-                .and(withStatus(filters.getStatus()))
-                .and(withSpecialization(filters.getSpecializationId()));
+        Specification<Appointment> spec = doctorAppointmentFilters(
+                doctor.getId(), patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
+                .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
         return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+    }
+
+    /**
+     * Returns counts by status for the authenticated doctor's matching appointments.
+     *
+     * @param patientName optional case-insensitive partial match against the patient's full name
+     * @param filters optional date range and specialization filters
+     * @return total and per-status counts, including zero counts
+     */
+    @Transactional
+    public AppointmentStatusCountsResponse getDoctorAppointmentStatusCounts(
+            String patientName, AppointmentStatusCountFilterRequest filters) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Specification<Appointment> specification = doctorAppointmentFilters(
+                doctor.getId(), patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
+        return toStatusCounts(appointmentRepository.countByStatus(specification));
+    }
+
+    private Specification<Appointment> patientAppointmentFilters(Long patientId, String doctorName,
+                                                                  LocalDate dateFrom, LocalDate dateTo,
+                                                                  Long specializationId) {
+        return Specification.where(forPatient(patientId))
+                .and(withOptionalDoctorName(doctorName))
+                .and(fromDate(dateFrom))
+                .and(toDate(dateTo))
+                .and(withSpecialization(specializationId));
+    }
+
+    private Specification<Appointment> doctorAppointmentFilters(Long doctorId, String patientName,
+                                                                  LocalDate dateFrom, LocalDate dateTo,
+                                                                  Long specializationId) {
+        return Specification.where(forDoctor(doctorId))
+                .and(withOptionalPatientName(patientName))
+                .and(fromDate(dateFrom))
+                .and(toDate(dateTo))
+                .and(withSpecialization(specializationId));
+    }
+
+    private AppointmentStatusCountsResponse toStatusCounts(Map<AppointmentStatusEnum, Long> matchingCounts) {
+        Map<AppointmentStatusEnum, Long> counts = new EnumMap<>(AppointmentStatusEnum.class);
+        for (AppointmentStatusEnum status : AppointmentStatusEnum.values()) {
+            counts.put(status, matchingCounts.getOrDefault(status, 0L));
+        }
+
+        long total = counts.values().stream().mapToLong(Long::longValue).sum();
+        return new AppointmentStatusCountsResponse(total, counts);
     }
 
     /**

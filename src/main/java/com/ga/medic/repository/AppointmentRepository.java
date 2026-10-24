@@ -10,7 +10,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
-public interface AppointmentRepository extends JpaRepository<Appointment, Long>, JpaSpecificationExecutor<Appointment> {
+public interface AppointmentRepository extends JpaRepository<Appointment, Long>, JpaSpecificationExecutor<Appointment>,
+        AppointmentStatusCountRepository {
 
     /**
      * Non-canceled appointments for a doctor within a date range.
