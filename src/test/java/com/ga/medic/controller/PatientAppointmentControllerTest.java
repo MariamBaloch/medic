@@ -1,7 +1,10 @@
 package com.ga.medic.controller;
 
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
+import com.ga.medic.dto.response.AppointmentDoctorResponse;
+import com.ga.medic.dto.response.AppointmentPatientResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
+import com.ga.medic.dto.response.SpecializationResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.exception.GlobalExceptionHandler;
 import com.ga.medic.service.AppointmentService;
@@ -51,13 +54,9 @@ class PatientAppointmentControllerTest {
         AppointmentResponse response = new AppointmentResponse(
                 appointmentId,
                 1L,
-                2L,
-                "Dr. Sarah Smith",
-                null,
-                null,
-                "MBBS, MD",
-                3L,
-                "John Doe",
+                new AppointmentDoctorResponse(2L, "Dr. Sarah Smith", "doctor.png",
+                        new SpecializationResponse(1L, "Cardiology", "Heart care"), "MBBS, MD"),
+                new AppointmentPatientResponse(3L, "John Doe", "patient.png"),
                 date,
                 startTime,
                 startTime.plusMinutes(30),
@@ -79,6 +78,14 @@ class PatientAppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(appointmentId))
                 .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.doctor.doctorId").value(2))
+                .andExpect(jsonPath("$.doctor.doctorName").value("Dr. Sarah Smith"))
+                .andExpect(jsonPath("$.doctor.doctorImageUrl").value("doctor.png"))
+                .andExpect(jsonPath("$.doctor.specialization.name").value("Cardiology"))
+                .andExpect(jsonPath("$.doctor.doctorQualification").value("MBBS, MD"))
+                .andExpect(jsonPath("$.patient.patientId").value(3))
+                .andExpect(jsonPath("$.patient.patientName").value("John Doe"))
+                .andExpect(jsonPath("$.patient.patientImageUrl").value("patient.png"))
                 .andExpect(jsonPath("$.appointmentDate").value(date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
                 .andExpect(jsonPath("$.startTime").value("10:00"));
 
@@ -96,4 +103,5 @@ class PatientAppointmentControllerTest {
 
         verifyNoInteractions(appointmentService);
     }
+
 }

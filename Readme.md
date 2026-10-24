@@ -140,14 +140,14 @@ running.
 | PATCH        | `/profile/patient`                                 | Update patient profile             | Patient       |
 | PATCH        | `/profile/doctor`                                  | Update doctor profile              | Doctor        |
 | GET          | `/patient/appointments`                            | Get patient appointments           | Patient       |
-| GET          | `/patient/appointments/{appointmentId}`            | Get appointment details            | Patient       |
+| GET          | `/appointments/{appointmentId}`                    | Get appointment details            | Patient, Doctor |
 | POST         | `/patient/appointments`                            | Book an appointment                | Patient       |
 | PUT          | `/patient/appointments/{appointmentId}/reschedule` | Reschedule a future appointment    | Patient       |
 | PUT          | `/patient/appointments/{id}/cancel`                | Cancel an appointment              | Patient       |
 | GET          | `/patient/appointments/doctors/{id}/availability`  | View doctor availability           | Patient       |
 | GET          | `/doctors/appointments`                            | Get doctor appointment history     | Doctor        |
 | PATCH        | `/doctors/appointments/{appointmentId}/status`     | Update appointment outcome         | Doctor        |
-| GET          | `/appointments/statuses`                           | List appointment statuses          | Authenticated |
+| GET          | `/appointments/statuses`                           | List appointment statuses          | Patient, Doctor |
 | GET          | `/doctors/availability/calendar`                   | Get doctor calendar                | Doctor        |
 | GET          | `/doctors/availability/rules`                      | List availability rules            | Doctor        |
 | POST         | `/doctors/availability/rules`                      | Create availability rule           | Doctor        |

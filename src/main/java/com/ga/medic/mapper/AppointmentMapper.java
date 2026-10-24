@@ -2,7 +2,11 @@ package com.ga.medic.mapper;
 
 import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.response.AppointmentDoctorResponse;
+import com.ga.medic.dto.response.AppointmentDoctorDetailResponse;
 import com.ga.medic.dto.response.AppointmentDetailResponse;
+import com.ga.medic.dto.response.AppointmentPatientResponse;
+import com.ga.medic.dto.response.AppointmentPatientDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
@@ -31,31 +35,48 @@ public interface AppointmentMapper {
     @Mapping(target = "availabilityRule", source = "rule")
     Appointment toEntity(AppointmentBookingRequest request, DoctorProfile doctor, PatientProfile patient, AvailabilityRule rule, LocalTime endTime);
 
-    @Mapping(target = "doctorId", source = "doctor.id")
-    @Mapping(target = "doctorName", source = "doctor.user.fullName")
-    @Mapping(target = "doctorImageUrl", source = "doctor.user.imageUrl")
-    @Mapping(target = "specialization", source = "doctor.specialization")
-    @Mapping(target = "doctorQualification", source = "doctor.qualification")
-    @Mapping(target = "patientId", source = "patient.id")
-    @Mapping(target = "patientName", source = "patient.user.fullName")
+    @Mapping(target = "doctor", source = "doctor")
+    @Mapping(target = "patient", source = "patient")
     @Mapping(target = "version", source = "version")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
     AppointmentResponse toResponse(Appointment appointment);
 
+    @Mapping(target = "doctorId", source = "id")
+    @Mapping(target = "doctorName", source = "user.fullName")
+    @Mapping(target = "doctorImageUrl", source = "user.imageUrl")
+    @Mapping(target = "specialization", source = "specialization")
+    @Mapping(target = "doctorQualification", source = "qualification")
+    AppointmentDoctorResponse toDoctorResponse(DoctorProfile doctor);
+
+    @Mapping(target = "patientId", source = "id")
+    @Mapping(target = "patientName", source = "user.fullName")
+    @Mapping(target = "patientImageUrl", source = "user.imageUrl")
+    AppointmentPatientResponse toPatientResponse(PatientProfile patient);
+
     List<AppointmentResponse> toResponseList(List<Appointment> appointments);
 
-    @Mapping(target = "doctorName", source = "doctor.user.fullName")
-    @Mapping(target = "doctorImageUrl", source = "doctor.user.imageUrl")
-    @Mapping(target = "doctorQualification", source = "doctor.qualification")
-    @Mapping(target = "specialization", source = "doctor.specialization")
-    @Mapping(target = "doctorYearsOfExperience", source = "doctor.yearsOfExperience")
-    @Mapping(target = "doctorHospitalAffiliation", source = "doctor.hospitalAffiliation")
-    @Mapping(target = "doctorClinicAddress", source = "doctor.clinicAddress")
-    @Mapping(target = "doctorLicenseNumber", source = "doctor.licenseNumber")
-    @Mapping(target = "doctorBio", source = "doctor.bio")
+    @Mapping(target = "doctor", source = "doctor")
+    @Mapping(target = "patient", source = "patient")
     @Mapping(target = "version", source = "version")
     AppointmentDetailResponse toDetailResponse(Appointment appointment);
+
+    @Mapping(target = "doctorName", source = "user.fullName")
+    @Mapping(target = "doctorImageUrl", source = "user.imageUrl")
+    @Mapping(target = "doctorQualification", source = "qualification")
+    @Mapping(target = "specialization", source = "specialization")
+    @Mapping(target = "doctorYearsOfExperience", source = "yearsOfExperience")
+    @Mapping(target = "doctorHospitalAffiliation", source = "hospitalAffiliation")
+    @Mapping(target = "doctorClinicAddress", source = "clinicAddress")
+    @Mapping(target = "doctorLicenseNumber", source = "licenseNumber")
+    @Mapping(target = "doctorBio", source = "bio")
+    @Mapping(target = "doctorId", source = "id")
+    AppointmentDoctorDetailResponse toDoctorDetailResponse(DoctorProfile doctor);
+
+    @Mapping(target = "patientId", source = "id")
+    @Mapping(target = "patientName", source = "user.fullName")
+    @Mapping(target = "patientImageUrl", source = "user.imageUrl")
+    AppointmentPatientDetailResponse toPatientDetailResponse(PatientProfile patient);
 
     @Mapping(target = "value", source = "status")
     @Mapping(target = "label", source = "label")

@@ -13,10 +13,7 @@ import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.PageMapper;
-import com.ga.medic.model.Appointment;
-import com.ga.medic.model.AvailabilityRule;
-import com.ga.medic.model.DoctorProfile;
-import com.ga.medic.model.PatientProfile;
+import com.ga.medic.model.*;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.repository.DoctorProfileRepository;
@@ -78,20 +75,21 @@ public class AppointmentService {
     }
 
     /**
-     * Returns a single appointment belonging to the authenticated patient, including the doctor's profile.
+     * Returns a single appointment belonging to the authenticated patient or doctor, including both profiles.
      *
      * @param appointmentId the ID of the appointment to retrieve
      * @return the appointment details
      */
     @Transactional
-    public AppointmentDetailResponse getPatientAppointment(Long appointmentId) {
-        Long currentUserId = authenticatedUser.getUserId();
-
+    public AppointmentDetailResponse getAppointmentDetails(Long appointmentId) {
+        User currentUser = authenticatedUser.get().user();
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        if (!appointment.getPatient().getUser().getId().equals(currentUserId)) {
-            throw new ForbiddenActionException("You can only view your own appointments");
+        boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
+        boolean isDoctor = appointment.getDoctor().getUser().getId().equals(currentUser.getId());
+        if (!isPatient && !isDoctor) {
+            throw new ForbiddenActionException("You can only view appointments you are associated with");
         }
 
         return appointmentMapper.toDetailResponse(appointment);

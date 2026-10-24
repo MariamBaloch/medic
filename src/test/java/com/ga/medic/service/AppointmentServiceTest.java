@@ -3,6 +3,7 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
+import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.exception.ForbiddenActionException;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -255,6 +257,41 @@ public class AppointmentServiceTest {
         appointment.setStatus(AppointmentStatusEnum.BOOKED);
         appointment.setVersion(version);
         return appointment;
+    }
+
+    @Test
+    public void getAppointmentDetails_shouldAllowOwningPatient() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentMapper.toDetailResponse(appointment)).thenReturn(response);
+
+        assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
+    }
+
+    @Test
+    public void getAppointmentDetails_shouldAllowOwningDoctor() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
+        when(userDetails.user()).thenReturn(doctor.getUser());
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentMapper.toDetailResponse(appointment)).thenReturn(response);
+
+        assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
+    }
+
+    @Test(expected = ForbiddenActionException.class)
+    public void getAppointmentDetails_shouldRejectUnrelatedUser() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        User unrelatedUser = new User();
+        unrelatedUser.setId(99L);
+        when(userDetails.user()).thenReturn(unrelatedUser);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.getAppointmentDetails(appointmentId);
     }
 
 

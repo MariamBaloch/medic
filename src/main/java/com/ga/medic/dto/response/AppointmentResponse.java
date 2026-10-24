@@ -19,26 +19,11 @@ public record AppointmentResponse(
         @Schema(description = "Optimistic-lock version; send this value when rescheduling", example = "0")
         Long version,
 
-        @Schema(description = "Doctor profile ID", example = "1")
-        Long doctorId,
+        @Schema(description = "Doctor information associated with the appointment")
+        AppointmentDoctorResponse doctor,
 
-        @Schema(description = "Doctor's full name", example = "Dr. Mariam Ali")
-        String doctorName,
-
-        @Schema(description = "Doctor's profile image URL")
-        String doctorImageUrl,
-
-        @Schema(description = "Doctor's medical specialization details")
-        SpecializationResponse specialization,
-
-        @Schema(description = "Doctor's qualification", example = "MBBS, MD")
-        String doctorQualification,
-
-        @Schema(description = "Patient profile ID", example = "2")
-        Long patientId,
-
-        @Schema(description = "Patient's full name", example = "Fatima Hassan")
-        String patientName,
+        @Schema(description = "Patient information associated with the appointment")
+        AppointmentPatientResponse patient,
 
         @Schema(description = "Date of the appointment", example = "05/10/2026")
         @JsonFormat(pattern = "dd/MM/yyyy")

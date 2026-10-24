@@ -5,7 +5,6 @@ import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
-import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
@@ -52,14 +51,6 @@ public class PatientAppointmentController {
             @ParameterObject AppointmentFilterRequest filters,
             @ParameterObject @PageableDefault(sort = {"appointmentDate", "startTime"}, direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(appointmentService.getPatientAppointments(doctorId, filters, pageable));
-    }
-
-    @GetMapping("/{appointmentId}")
-    @Operation(summary = "Get appointment details",
-            description = "Returns the details of one of the authenticated patient's appointments, including the doctor's profile information.")
-    public ResponseEntity<AppointmentDetailResponse> getAppointmentById(
-            @Parameter(description = "Appointment ID") @PathVariable Long appointmentId) {
-        return ResponseEntity.ok(appointmentService.getPatientAppointment(appointmentId));
     }
 
     @PostMapping

@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-@Schema(description = "Detailed appointment information including the doctor's profile")
+@Schema(description = "Detailed appointment information including doctor and patient profiles")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record AppointmentDetailResponse(
 
@@ -40,31 +40,10 @@ public record AppointmentDetailResponse(
         @Schema(description = "Reason for cancellation, if cancelled")
         String cancelledReason,
 
-        @Schema(description = "Doctor's full name", example = "Dr. Mariam Ali")
-        String doctorName,
+        @Schema(description = "Doctor profile details")
+        AppointmentDoctorDetailResponse doctor,
 
-        @Schema(description = "Doctor's profile image URL")
-        String doctorImageUrl,
-
-        @Schema(description = "Doctor's qualification", example = "MBBS, MD")
-        String doctorQualification,
-
-        @Schema(description = "Doctor's medical specialization details")
-        SpecializationResponse specialization,
-
-        @Schema(description = "Years of professional experience", example = "10")
-        Integer doctorYearsOfExperience,
-
-        @Schema(description = "Hospital affiliation", example = "Manama Medical Center")
-        String doctorHospitalAffiliation,
-
-        @Schema(description = "Clinic address", example = "Building 45, Road 3621, Manama")
-        String doctorClinicAddress,
-
-        @Schema(description = "Medical license number", example = "MD10001")
-        String doctorLicenseNumber,
-
-        @Schema(description = "Professional biography")
-        String doctorBio
+        @Schema(description = "Patient identity and profile details")
+        AppointmentPatientDetailResponse patient
 ) {
 }
