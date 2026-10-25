@@ -23,12 +23,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class AvailabilityRuleService {
+
+    private static final DateTimeFormatter DISPLAY_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
     private final AvailabilityRuleRepository ruleRepository;
     private final AuthenticatedUser authenticatedUser;
@@ -199,6 +202,58 @@ public class AvailabilityRuleService {
             throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
         }
         return computeAvailableSlots(doctorId, from, to, excludedAppointmentId);
+    }
+
+    /**
+     * Returns one day's dynamically calculated availability grouped into contiguous time ranges.
+     * The start/end values remain machine-readable; displayRange is formatted for client presentation.
+     */
+    @Transactional(readOnly = true)
+    public DoctorDailyAvailabilityResponse getDailyAvailabilityForAuthenticatedDoctor(LocalDate date) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        if (doctor == null) {
+            throw new InformationNotFoundException("Doctor profile not found.");
+        }
+
+        Long doctorId = doctor.getId();
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctorId, date, date, null);
+        return new DoctorDailyAvailabilityResponse(doctorId, date, mergeAdjacentSlots(slots));
+    }
+
+    private List<AvailableTimeRangeResponse> mergeAdjacentSlots(List<AvailableSlotResponse> slots) {
+        if (slots.isEmpty()) {
+            return List.of();
+        }
+
+        List<AvailableTimeRangeResponse> ranges = new ArrayList<>();
+        LocalTime rangeStart = slots.get(0).startTime();
+        LocalTime rangeEnd = slots.get(0).endTime();
+        int slotMinutes = slots.get(0).slotMinutes();
+
+        for (int index = 1; index < slots.size(); index++) {
+            AvailableSlotResponse slot = slots.get(index);
+            boolean contiguous = !slot.startTime().isAfter(rangeEnd);
+
+            if (contiguous && slot.slotMinutes() == slotMinutes) {
+                if (slot.endTime().isAfter(rangeEnd)) {
+                    rangeEnd = slot.endTime();
+                }
+                continue;
+            }
+
+            ranges.add(toTimeRange(rangeStart, rangeEnd, slotMinutes));
+            rangeStart = slot.startTime();
+            rangeEnd = slot.endTime();
+            slotMinutes = slot.slotMinutes();
+        }
+
+        ranges.add(toTimeRange(rangeStart, rangeEnd, slotMinutes));
+        return List.copyOf(ranges);
+    }
+
+    private AvailableTimeRangeResponse toTimeRange(LocalTime startTime, LocalTime endTime, int slotMinutes) {
+        String displayRange = startTime.format(DISPLAY_TIME_FORMAT) + " - " + endTime.format(DISPLAY_TIME_FORMAT);
+        return new AvailableTimeRangeResponse(startTime, endTime, slotMinutes, displayRange);
     }
 
     /**

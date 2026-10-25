@@ -146,6 +146,7 @@ running.
 | PUT          | `/patient/appointments/{appointmentId}/reschedule` | Reschedule a future appointment    | Patient       |
 | PUT          | `/patient/appointments/{id}/cancel`                | Cancel an appointment              | Patient       |
 | GET          | `/patient/appointments/doctors/{id}/availability`  | View doctor availability           | Patient       |
+| GET          | `/doctors/availability/day?date=dd/MM/yyyy`      | Get the authenticated doctor's open ranges (e.g. 1:00 PM - 2:00 PM) | Doctor |
 | GET          | `/doctors/appointments`                            | Get doctor appointment history     | Doctor        |
 | GET          | `/doctors/appointments/status-counts`              | Count doctor appointments by status | Doctor       |
 | PATCH        | `/doctors/appointments/{appointmentId}/status`     | Update appointment outcome         | Doctor        |

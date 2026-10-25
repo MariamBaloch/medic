@@ -3,10 +3,7 @@ package com.ga.medic.controller;
 
 import com.ga.medic.annotation.AuditLogger;
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
-import com.ga.medic.dto.response.AvailabilityRuleDeleteResponse;
-import com.ga.medic.dto.response.AvailabilityRuleResponse;
-import com.ga.medic.dto.response.AvailabilityRuleUpdateResponse;
-import com.ga.medic.dto.response.DoctorCalendarResponse;
+import com.ga.medic.dto.response.*;
 import com.ga.medic.enums.AuditAction;
 import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.AvailabilityRuleService;
@@ -78,5 +75,14 @@ public class DoctorAvailabilityController {
             @Parameter(description = "End date (dd/MM/yyyy)", required = true)
             @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate to) {
         return ResponseEntity.ok(availabilityRuleService.getCalendar(from, to));
+    }
+
+    @Operation(summary = "Get one day's availability ranges",
+            description = "Returns contiguous open-time ranges for the authenticated doctor. Times include machine-readable 24-hour values and display labels such as 1:00 PM - 2:00 PM.")
+    @GetMapping("/day")
+    public ResponseEntity<DoctorDailyAvailabilityResponse> getDailyAvailability(
+            @Parameter(description = "Availability date (dd/MM/yyyy)", example = "25/10/2026", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate date) {
+        return ResponseEntity.ok(availabilityRuleService.getDailyAvailabilityForAuthenticatedDoctor(date));
     }
 }
