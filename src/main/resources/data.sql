@@ -152,6 +152,24 @@ CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient2@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '4 days' AND a.start_time = '14:00:00');
 
+-- Seed past appointment history for Patient 1
+INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + v.day_offset, v.start_time, v.end_time, dp.consultation_fee, v.status, v.reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
+CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
+CROSS JOIN (VALUES
+    (INTERVAL '-4 days', TIME '09:00:00', TIME '09:30:00', 'COMPLETED', 'General Checkup'),
+    (INTERVAL '-3 days', TIME '09:30:00', TIME '10:00:00', 'COMPLETED', 'Follow up'),
+    (INTERVAL '-2 days', TIME '10:00:00', TIME '10:30:00', 'NO_SHOW', 'Consultation'),
+    (INTERVAL '-1 day', TIME '10:30:00', TIME '11:00:00', 'CANCELLED', 'Review')
+) AS v(day_offset, start_time, end_time, status, reason)
+WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient1@medic.com'
+AND NOT EXISTS (
+    SELECT 1 FROM appointment a
+    WHERE a.doctor_id = dp.id AND a.patient_id = pp.id
+      AND a.appointment_date = CURRENT_DATE + v.day_offset AND a.start_time = v.start_time
+);
+
 -- Seed Notifications
 INSERT INTO notification (user_id, type, action, title, message, read, created_at, updated_at)
 SELECT id, 'APPOINTMENT', 'BOOKED', 'Appointment Booked', 'Your appointment is booked', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
