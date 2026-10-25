@@ -160,6 +160,10 @@ running.
 | POST         | `/doctors/availability/exceptions`                 | Create availability exception      | Doctor        |
 | PUT          | `/doctors/availability/exceptions/{id}`            | Update availability exception      | Doctor        |
 | DELETE       | `/doctors/availability/exceptions/{id}`            | Delete availability exception      | Doctor        |
+| GET          | `/notifications?page=0&size=20&unreadOnly=true`    | List notifications; `unreadOnly=true` filters unread items | Authenticated |
+| GET          | `/notifications/unread-count`                      | Get my unread notification count   | Authenticated |
+| PATCH        | `/notifications/{notificationId}/read`             | Mark one notification as read      | Authenticated |
+| PATCH        | `/notifications/read-all`                          | Mark all my notifications as read  | Authenticated |
 | GET          | `/notifications/subscribe`                         | Connect to real-time notifications | Authenticated |
 | PATCH        | `/admin/doctors/{id}/verify`                       | Verify a doctor profile            | Admin         |
 | DELETE       | `/admin/users/{userId}`                            | Soft delete a user                 | Admin         |
