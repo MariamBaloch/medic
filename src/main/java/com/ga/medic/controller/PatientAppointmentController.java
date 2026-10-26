@@ -1,14 +1,10 @@
 package com.ga.medic.controller;
 
 import com.ga.medic.annotation.AuditLogger;
-import com.ga.medic.dto.request.AppointmentBookingRequest;
-import com.ga.medic.dto.request.AppointmentFilterRequest;
-import com.ga.medic.dto.request.AppointmentStatusCountFilterRequest;
-import com.ga.medic.dto.request.CancelAppointmentRequest;
-import com.ga.medic.dto.request.RescheduleAppointmentRequest;
+import com.ga.medic.dto.request.*;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusCountsResponse;
-import com.ga.medic.dto.response.AvailableSlotResponse;
+import com.ga.medic.dto.response.DoctorAvailabilityResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AuditAction;
 import com.ga.medic.enums.AuditEntityType;
@@ -108,14 +104,14 @@ public class PatientAppointmentController {
     }
 
     @Operation(summary = "Get doctor availability",
-            description = "View available appointment slots for a specific doctor within a date range.")
+            description = "Returns all valid scheduled future slots in the requested date range, including booked slots and dates where every slot is booked. Each slot has status AVAILABLE, BOOKED, or WAITLIST_OFFERED and patient-specific waitlist eligibility fields.")
     @GetMapping("/doctors/{doctorId}/availability")
-    public ResponseEntity<List<AvailableSlotResponse>> getDoctorAvailability(
+    public ResponseEntity<DoctorAvailabilityResponse> getDoctorAvailability(
             @PathVariable Long doctorId,
             @Parameter(description = "Start date (dd/MM/yyyy)", required = true)
             @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate from,
             @Parameter(description = "End date (dd/MM/yyyy)", required = true)
             @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate to) {
-        return ResponseEntity.ok(availabilityRuleService.getAvailability(doctorId, from, to));
+        return ResponseEntity.ok(availabilityRuleService.getAvailabilityForPatient(doctorId, from, to));
     }
 }
