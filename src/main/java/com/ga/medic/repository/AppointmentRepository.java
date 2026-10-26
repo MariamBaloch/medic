@@ -19,6 +19,14 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
     List<Appointment> findActiveByDoctorAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    /**
+     * Non-canceled appointments for a patient within a date range, used to calculate waitlist eligibility.
+     */
+    @Query("SELECT a FROM Appointment a WHERE a.patient.id = :patientId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
+    List<Appointment> findActiveByPatientAndDateRange(@Param("patientId") Long patientId,
+                                                       @Param("from") LocalDate from,
+                                                       @Param("to") LocalDate to);
+
     List<Appointment> findByAvailabilityRuleId(Long ruleId);
 
     /**
