@@ -55,6 +55,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SlotNotAvailableException.class)
     public ResponseEntity<ErrorResponse> handleSlotNotAvailableExceptions(SlotNotAvailableException ex, HttpServletRequest request) {
+        log.warn("Appointment slot conflict on {}: {}", request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(WaitlistOfferConflictException.class)
+    public ResponseEntity<ErrorResponse> handleWaitlistOfferConflict(WaitlistOfferConflictException ex, HttpServletRequest request) {
+        log.warn("Waitlist or appointment conflict on {}: {}", request.getRequestURI(), ex.getMessage());
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
     }
 
