@@ -6,6 +6,8 @@ import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentDetailResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.enums.NotificationAction;
+import com.ga.medic.enums.NotificationType;
 import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
@@ -16,6 +18,7 @@ import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
 import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.security.MyUserDetails;
+import jakarta.persistence.EntityManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -23,6 +26,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -65,6 +69,12 @@ public class AppointmentServiceTest {
     @Mock
     private NotificationMapper notificationMapper;
     @Mock
+    private AppointmentSlotLockService slotLockService;
+    @Mock
+    private AppointmentWaitlistService waitlistService;
+    @Mock
+    private EntityManager entityManager;
+    @Mock
     private MyUserDetails userDetails;
     @InjectMocks
     private AppointmentService appointmentService;
@@ -91,6 +101,7 @@ public class AppointmentServiceTest {
         when(authenticatedUser.get()).thenReturn(userDetails);
         when(userDetails.user()).thenReturn(patientUser);
         when(patientProfileRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(patient));
+        ReflectionTestUtils.setField(appointmentService, "entityManager", entityManager);
     }
 
     @Test(expected = InformationNotFoundException.class)
@@ -177,8 +188,7 @@ public class AppointmentServiceTest {
         assertEquals(targetRule, appointment.getAvailabilityRule());
         verify(appointmentRepository).saveAndFlush(appointment);
         verify(notificationService, times(2)).createAndSend(
-                any(), eq(com.ga.medic.enums.NotificationType.APPOINTMENT),
-                eq(com.ga.medic.enums.NotificationAction.RESCHEDULED),
+                any(), eq(NotificationType.APPOINTMENT), eq(NotificationAction.RESCHEDULED),
                 anyString(), anyString(), eq(false), eq(appointmentId));
     }
 
@@ -314,11 +324,11 @@ public class AppointmentServiceTest {
 
         when(authenticatedUser.getUserId()).thenReturn(1L);
         when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(any())).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
 
         appointmentService.cancelAppointment(1L, new CancelAppointmentRequest("reason"));
 
         assertEquals(AppointmentStatusEnum.CANCELLED, appointment.getStatus());
-        verify(appointmentRepository).save(appointment);
+        verify(appointmentRepository).saveAndFlush(appointment);
     }
 }
