@@ -195,6 +195,7 @@ public class NotificationService {
 
     private void sendEmailNotification(NotificationDispatchEvent event) {
         NotificationResponse notification = event.notification();
+        String deliveryThreadName = Thread.currentThread().getName();
         try {
             emailService.sendTemplateEmail(
                     event.recipientEmail(),
@@ -210,10 +211,11 @@ public class NotificationService {
                                     ? "" : notification.relatedEntityId()
                     )
             );
-            log.info("Notification email sent: notificationId={}, userId={}", notification.id(), event.userId());
+            log.info("Notification email sent: notificationId={}, userId={}, threadName={}",
+                    notification.id(), event.userId(), deliveryThreadName);
         } catch (RuntimeException exception) {
-            log.warn("Notification email failed: notificationId={}, userId={}",
-                    notification.id(), event.userId(), exception);
+            log.warn("Notification email failed: notificationId={}, userId={}, threadName={}",
+                    notification.id(), event.userId(), deliveryThreadName, exception);
         }
     }
 }
