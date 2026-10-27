@@ -4,6 +4,7 @@ import com.ga.medic.enums.WaitlistStatusEnum;
 import com.ga.medic.model.AppointmentWaitlistEntry;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,7 +18,8 @@ import java.util.Optional;
 /**
  * Provides database operations for appointment waitlist entries.
  */
-public interface AppointmentWaitlistEntryRepository extends JpaRepository<AppointmentWaitlistEntry, Long> {
+public interface AppointmentWaitlistEntryRepository extends JpaRepository<AppointmentWaitlistEntry, Long>,
+        JpaSpecificationExecutor<AppointmentWaitlistEntry> {
 
     /**
      * Retrieves all waitlist entries for a patient, ordered from newest to oldest.

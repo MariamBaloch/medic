@@ -11,7 +11,7 @@ import org.mapstruct.Mapping;
 
 import java.util.List;
 
-@Mapper(config = GlobalMapperConfig.class)
+@Mapper(config = GlobalMapperConfig.class, uses = SpecializationMapper.class)
 public interface AppointmentWaitlistEntryMapper {
 
     @Mapping(target = "id", ignore = true)
@@ -24,6 +24,7 @@ public interface AppointmentWaitlistEntryMapper {
 
     @Mapping(target = "doctorId", source = "doctor.id")
     @Mapping(target = "doctorName", source = "doctor.user.fullName")
+    @Mapping(target = "specialization", source = "doctor.specialization")
     AppointmentWaitlistEntryResponse toResponse(AppointmentWaitlistEntry entry);
 
     List<AppointmentWaitlistEntryResponse> toResponseList(List<AppointmentWaitlistEntry> entries);

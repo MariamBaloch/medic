@@ -1,10 +1,12 @@
 package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AppointmentBookingRequest;
+import com.ga.medic.dto.request.AppointmentWaitlistFilterRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
+import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AvailableSlotStatusEnum;
 import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
@@ -15,6 +17,7 @@ import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.exception.WaitlistOfferConflictException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AppointmentWaitlistEntryMapper;
+import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
 import com.ga.medic.security.AuthenticatedUser;
@@ -22,14 +25,21 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+
+import static com.ga.medic.specification.AppointmentWaitlistEntrySpecifications.*;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +49,16 @@ public class AppointmentWaitlistService {
     private static final List<WaitlistStatusEnum> ACTIVE_ENTRY_STATUSES =
             List.of(WaitlistStatusEnum.WAITING, WaitlistStatusEnum.OFFERED);
     private static final long OFFER_WINDOW_MINUTES = 15;
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Sort NEWEST_FIRST_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+    private static final DateTimeFormatter NOTIFICATION_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter NOTIFICATION_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+    private static final DateTimeFormatter OFFER_EXPIRY_FORMAT =
+            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm:ss a", Locale.ENGLISH)
+                    .withZone(ZoneOffset.UTC);
+
     private final AppointmentWaitlistEntryRepository waitlistRepository;
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorProfileRepository doctorProfileRepository;
@@ -48,6 +68,7 @@ public class AppointmentWaitlistService {
     private final AppointmentSlotLockService slotLockService;
     private final AppointmentMapper appointmentMapper;
     private final AppointmentWaitlistEntryMapper waitlistEntryMapper;
+    private final PageMapper pageMapper;
     private final AuthenticatedUser authenticatedUser;
     private final NotificationService notificationService;
     @PersistenceContext
@@ -69,8 +90,8 @@ public class AppointmentWaitlistService {
 
         DoctorProfile doctor = doctorProfileRepository.findById(request.doctorId())
                 .orElseThrow(() -> new InformationNotFoundException("Doctor with id " + request.doctorId() + " not found"));
-        if (!request.date().isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException("Waitlist date must be in the future");
+        if (!LocalDateTime.of(request.date(), request.startTime()).isAfter(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Requested waitlist slot must be in the future");
         }
 
         slotLockService.acquire(doctor.getId(), request.date(), request.startTime());
@@ -106,18 +127,37 @@ public class AppointmentWaitlistService {
     }
 
     /**
-     * Retrieves the authenticated patient's waitlist entries, newest first.
+     * Retrieves the authenticated patient's waitlist entries with optional doctor, date, and status filters.
      *
-     * @return the patient's waitlist entries
+     * @param doctorName case-insensitive partial match against the doctor's full name
+     * @param filters    optional requested-date range and status filters
+     * @param pageable   page and sort options
+     * @return a page of the patient's matching waitlist entries, newest first by default
      */
     @Transactional(readOnly = true)
-    public List<AppointmentWaitlistEntryResponse> getMyEntries() {
+    public PageResponse<AppointmentWaitlistEntryResponse> getMyEntries(
+            String doctorName, AppointmentWaitlistFilterRequest filters, Pageable pageable) {
+        if (pageable == null || pageable.isUnpaged() || pageable.getPageNumber() < 0) {
+            throw new IllegalArgumentException("Page must be zero or greater");
+        }
+        if (pageable.getPageSize() < 1 || pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+
         PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
         if (patient == null) {
             throw new InformationNotFoundException("Patient profile not found");
         }
-        return waitlistEntryMapper.toResponseList(
-                waitlistRepository.findAllByPatient_IdOrderByCreatedAtDescIdDesc(patient.getId()));
+
+        Specification<AppointmentWaitlistEntry> specification = forPatient(patient.getId())
+                .and(withOptionalDoctorName(doctorName))
+                .and(fromDate(filters.getDateFrom()))
+                .and(toDate(filters.getDateTo()))
+                .and(withStatus(filters.getStatus()));
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : NEWEST_FIRST_SORT;
+        Pageable pageRequest = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        Page<AppointmentWaitlistEntry> entries = waitlistRepository.findAll(specification, pageRequest);
+        return pageMapper.toResponse(entries, waitlistEntryMapper::toResponse);
     }
 
     /**
@@ -299,7 +339,7 @@ public class AppointmentWaitlistService {
         }
 
         AvailableSlotResponse slot = findSlot(doctor.getId(), date, startTime, null);
-        if (slot == null || !date.isAfter(LocalDate.now())) {
+        if (slot == null) {
             return;
         }
         List<AppointmentWaitlistEntry> queue = waitlistRepository
@@ -319,8 +359,11 @@ public class AppointmentWaitlistService {
             candidate = waitlistRepository.saveAndFlush(candidate);
 
             String doctorName = doctor.getUser().getFullName();
-            String message = "A waitlist appointment with " + doctorName + " is available on " + date + " at "
-                    + startTime + ". Accept before " + candidate.getOfferExpiresAt() + " to book this slot.";
+            String appointmentDate = date.format(NOTIFICATION_DATE_FORMAT);
+            String appointmentTime = startTime.format(NOTIFICATION_TIME_FORMAT);
+            String offerExpiresAt = OFFER_EXPIRY_FORMAT.format(candidate.getOfferExpiresAt());
+            String message = "A waitlist appointment with " + doctorName + " is available on " + appointmentDate
+                    + " at " + appointmentTime + ". Please accept by " + offerExpiresAt + " to book this slot.";
             notificationService.createAndSend(candidate.getPatient().getUser(), NotificationType.WAITLIST,
                     NotificationAction.OFFERED, "Appointment Slot Available", message, false, candidate.getId());
             log.info("Appointment waitlist offer created: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}, expiresAt={}",

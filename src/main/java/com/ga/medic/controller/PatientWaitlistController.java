@@ -1,22 +1,27 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.dto.request.AppointmentWaitlistFilterRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;
+import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.service.AppointmentWaitlistService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/patient/waitlist")
@@ -44,10 +49,15 @@ public class PatientWaitlistController {
 
     @GetMapping
     @Operation(summary = "List my waitlist entries",
-            description = "Returns only entries owned by the authenticated patient, including offer status and expiration time.")
-    @ApiResponse(responseCode = "200", description = "Patient's waitlist entries")
-    public ResponseEntity<List<AppointmentWaitlistEntryResponse>> listMine() {
-        return ResponseEntity.ok(waitlistService.getMyEntries());
+            description = "Returns only entries owned by the authenticated patient, including offer status and expiration time. Supports case-insensitive doctor-name search, requested-date range and status filters, and pagination; entries are newest first by default.")
+    @ApiResponse(responseCode = "200", description = "Page of the authenticated patient's matching waitlist entries")
+    public ResponseEntity<PageResponse<AppointmentWaitlistEntryResponse>> listMine(
+            @Parameter(description = "Case-insensitive partial match against the doctor's full name")
+            @RequestParam(required = false) String doctorName,
+            @ParameterObject AppointmentWaitlistFilterRequest filters,
+            @ParameterObject @PageableDefault(size = 20, sort = {"createdAt", "id"},
+                    direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(waitlistService.getMyEntries(doctorName, filters, pageable));
     }
 
     @DeleteMapping("/{id}")

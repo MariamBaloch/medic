@@ -13,6 +13,8 @@ public record AppointmentWaitlistEntryResponse(
         Long id,
         Long doctorId,
         String doctorName,
+        @Schema(description = "Doctor's medical specialization details")
+        SpecializationResponse specialization,
         @JsonFormat(pattern = "dd/MM/yyyy") LocalDate appointmentDate,
         @JsonFormat(pattern = "HH:mm") LocalTime preferredStartTime,
         WaitlistStatusEnum status,
