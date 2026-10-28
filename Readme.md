@@ -40,6 +40,9 @@ accounts.
 - **JJWT** for JWT creation and validation
 - **Spring Data JPA** for persistence
 - **PostgreSQL** as the main relational database
+- **PostgreSQL advisory transaction locks and partial unique indexes** for slot-level concurrency protection
+- **Flyway** for versioned PostgreSQL schema migrations (V1–V4), including appointment concurrency and waitlist changes
+- **Spring Data JPA Specifications and Pageable** for waitlist filtering and pagination
 - **Spring Validation** for request validation
 - **Spring Mail** for email delivery
 - **Thymeleaf** for styled HTML email templates
@@ -51,7 +54,9 @@ accounts.
 - **MapStruct** for DTO/entity mapping
 - **Lombok** for reducing boilerplate
 - **Server-Sent Events (SSE)** for real-time notifications
+- **Java `ThreadPoolExecutor`** for bounded post-commit email dispatch
 - **JUnit** and **Spring Boot Test** for testing
+- **H2** for business-logic tests and **Testcontainers** for PostgreSQL integration tests
 - **Spring Boot DevTools** for local development
 - **Maven** for dependency management and builds
 
