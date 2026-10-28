@@ -29,7 +29,10 @@ accounts.
 |---------|----------------------|-----------|
 | Admin   | `admin@medic.com`    | `Potato!` |
 | Doctor  | `doctor1@medic.com`  | `Potato!` |
+| Doctor  | `doctor2@medic.com`  | `Potato!` |
 | Patient | `patient1@medic.com` | `Potato!` |
+| Patient | `patient2@medic.com` | `Potato!` |
+| Patient | `patient3@medic.com` | `Potato!` |
 
 ## Technologies
 

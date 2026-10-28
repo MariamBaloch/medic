@@ -45,6 +45,12 @@ SELECT id, 'patient2@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUm
 FROM roles WHERE name = 'PATIENT'
 ON CONFLICT (email) DO NOTHING;
 
+-- Patient 3
+INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
+SELECT id, 'patient3@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'Alex', 'Morgan', '1995-03-15', '5551234563', 'MALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM roles WHERE name = 'PATIENT'
+ON CONFLICT (email) DO NOTHING;
+
 -- Seed Doctor Profiles
 INSERT INTO doctor_profiles (user_id, specialization_id, license_number, qualification, years_of_experience, consultation_fee, hospital_affiliation, bio, is_verified, created_at, updated_at)
 SELECT u.id, s.id, 'MD10001', 'MBBS, MD', 10, 150.00, 'City Hospital', 'Experienced cardiologist.', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -67,6 +73,11 @@ ON CONFLICT (user_id) DO NOTHING;
 INSERT INTO patient_profile (user_id, address, city, country, blood_type, height_cm, weight_kg, allergies, chronic_conditions, created_at, updated_at)
 SELECT u.id, '456 Elm St', 'Gotham', 'Countryland', 'A_NEGATIVE', 165, 60, 'Dust', 'Asthma', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM users u WHERE u.email = 'patient2@medic.com'
+ON CONFLICT (user_id) DO NOTHING;
+
+INSERT INTO patient_profile (user_id, address, city, country, blood_type, height_cm, weight_kg, allergies, chronic_conditions, created_at, updated_at)
+SELECT u.id, '789 Oak St', 'Star City', 'Countryland', 'B_POSITIVE', 172, 68, 'None', 'None', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM users u WHERE u.email = 'patient3@medic.com'
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Seed Availability Rules
@@ -157,6 +168,83 @@ AND NOT EXISTS (
     WHERE a.doctor_id = dp.id AND a.patient_id = pp.id
       AND a.appointment_date = CURRENT_DATE + v.day_offset AND a.start_time = v.start_time
 );
+
+-- Ensure each seeded patient has at least three past completed appointments.
+-- Existing completed history is counted first so rerunning this seed does not add duplicates.
+WITH completed_counts AS (
+    SELECT appointment.patient_id, COUNT(*) AS completed_count
+    FROM appointment
+    JOIN patient_profile ON patient_profile.id = appointment.patient_id
+    JOIN users patient_user ON patient_user.id = patient_profile.user_id
+    WHERE patient_user.email IN ('patient1@medic.com', 'patient2@medic.com', 'patient3@medic.com')
+      AND appointment.status = 'COMPLETED'
+      AND appointment.appointment_date < CURRENT_DATE
+    GROUP BY appointment.patient_id
+),
+seed_patients AS (
+    SELECT patient_profile.id AS patient_id, COALESCE(completed_counts.completed_count, 0) AS completed_count
+    FROM patient_profile
+    JOIN users patient_user ON patient_user.id = patient_profile.user_id
+    LEFT JOIN completed_counts ON completed_counts.patient_id = patient_profile.id
+    WHERE patient_user.email IN ('patient1@medic.com', 'patient2@medic.com', 'patient3@medic.com')
+),
+seed_doctor AS (
+    SELECT doctor_profiles.id AS doctor_id,
+           doctor_profiles.consultation_fee,
+           (SELECT availability_rule.id
+            FROM availability_rule
+            WHERE availability_rule.doctor_id = doctor_profiles.id
+            ORDER BY availability_rule.id
+            LIMIT 1) AS availability_rule_id
+    FROM doctor_profiles
+    JOIN users doctor_user ON doctor_user.id = doctor_profiles.user_id
+    WHERE doctor_user.email = 'doctor1@medic.com'
+),
+candidate_slots AS (
+    SELECT seed_patients.patient_id,
+           seed_doctor.doctor_id,
+           seed_doctor.availability_rule_id,
+           seed_doctor.consultation_fee,
+           CURRENT_DATE - (30 + CAST(seed_patients.patient_id AS INTEGER) * 10 + slot_number.candidate_number)
+               AS appointment_date,
+           TIME '10:00:00' AS start_time,
+           TIME '10:30:00' AS end_time,
+           slot_number.candidate_number,
+           seed_patients.completed_count
+    FROM seed_patients
+    CROSS JOIN (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10))
+        AS slot_number(candidate_number)
+    CROSS JOIN seed_doctor
+    WHERE seed_patients.completed_count < 3
+      AND seed_doctor.availability_rule_id IS NOT NULL
+),
+available_candidates AS (
+    SELECT candidate_slots.*
+    FROM candidate_slots
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM appointment
+        WHERE appointment.doctor_id = candidate_slots.doctor_id
+          AND appointment.appointment_date = candidate_slots.appointment_date
+          AND appointment.start_time = candidate_slots.start_time
+    )
+),
+ranked_candidates AS (
+    SELECT available_candidates.*,
+           ROW_NUMBER() OVER (
+               PARTITION BY available_candidates.patient_id
+               ORDER BY available_candidates.candidate_number
+           ) AS candidate_rank
+    FROM available_candidates
+)
+INSERT INTO appointment (
+    doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time,
+    booking_fee, status, reason, created_at, updated_at
+)
+SELECT doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time,
+       consultation_fee, 'COMPLETED', 'Historical checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM ranked_candidates
+WHERE candidate_rank <= 3 - completed_count;
 
 -- Seed Notifications
 INSERT INTO notification (user_id, type, action, title, message, read, created_at, updated_at)
