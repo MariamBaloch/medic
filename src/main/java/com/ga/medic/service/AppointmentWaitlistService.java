@@ -25,6 +25,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -56,8 +57,7 @@ public class AppointmentWaitlistService {
     private static final DateTimeFormatter NOTIFICATION_TIME_FORMAT =
             DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
     private static final DateTimeFormatter OFFER_EXPIRY_FORMAT =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm:ss a", Locale.ENGLISH)
-                    .withZone(ZoneOffset.UTC);
+            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm:ss a", Locale.ENGLISH);
 
     private final AppointmentWaitlistEntryRepository waitlistRepository;
     private final PatientProfileRepository patientProfileRepository;
@@ -71,6 +71,8 @@ public class AppointmentWaitlistService {
     private final PageMapper pageMapper;
     private final AuthenticatedUser authenticatedUser;
     private final NotificationService notificationService;
+    @Value("${app.time-zone:Asia/Bahrain}")
+    private String appTimeZone;
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -361,7 +363,8 @@ public class AppointmentWaitlistService {
             String doctorName = doctor.getUser().getFullName();
             String appointmentDate = date.format(NOTIFICATION_DATE_FORMAT);
             String appointmentTime = startTime.format(NOTIFICATION_TIME_FORMAT);
-            String offerExpiresAt = OFFER_EXPIRY_FORMAT.format(candidate.getOfferExpiresAt());
+            String offerExpiresAt = OFFER_EXPIRY_FORMAT.withZone(ZoneId.of(appTimeZone))
+                    .format(candidate.getOfferExpiresAt());
             String message = "A waitlist appointment with " + doctorName + " is available on " + appointmentDate
                     + " at " + appointmentTime + ". Please accept by " + offerExpiresAt + " to book this slot.";
             notificationService.createAndSend(candidate.getPatient().getUser(), NotificationType.WAITLIST,
