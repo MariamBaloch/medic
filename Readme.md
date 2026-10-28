@@ -11,11 +11,12 @@ while doctors can manage their schedules, availability rules, and appointment hi
 - **Role-Based Access Control:** Distinct roles for Patients, Doctors, and Administrators.
 - **Secure Authentication:** JWT-based authentication with email verification and password recovery.
 - **Profile Management:** Users can manage their profiles and upload avatars.
-- **Advanced Booking System:** Real-time availability calculation based on doctor-defined schedules and exceptions.
-  Double-booking prevention.
+- **Advanced Booking System:** Real-time availability calculation based on doctor-defined schedules and exceptions, with
+  transaction-safe booking, rescheduling, and double-booking prevention.
+- **Priority Appointment Waitlist:** Patients can queue for one exact booked slot. When it is released, the earliest
+  eligible patient receives a 15-minute offer that reserves the slot until accepted, declined, or expired.
 - **Real-Time & Email Notifications:** Server-Sent Events (SSE) push notifications for appointment updates, with
-  matching
-  styled email notifications.
+  matching styled email notifications dispatched after the business transaction commits.
 - **Security & Reliability:** Global exception handling, API rate limiting using Redis, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
@@ -90,24 +91,35 @@ slots in real-time by:
 1. Fetching all active `AvailabilityRule` for the doctor.
 2. Generating a virtual schedule of time slots in memory.
 3. Fetching and applying `AvailabilityException`s to cross out unavailable times.
-4. Fetching existing `Appointment`s to cross out already booked slots.
-5. Returning the final list of open slots to the user.
+4. Fetching existing `Appointment`s and active waitlist offers to label each valid scheduled slot as `AVAILABLE`,
+   `BOOKED`, or `WAITLIST_OFFERED`.
+5. Returning valid slots, including booked slots, so a patient calendar can offer waitlist entry where appropriate.
 
 This approach guarantees high performance, negligible storage requirements, and immediate reflection of any schedule
 changes.
 
-## General Approach
+### Booking Concurrency and Priority Waitlist
 
-The project was developed incrementally, starting with the core entity modeling and database design. Following this, the
-authentication system (JWT) and role management were implemented. With secure access in place, the core business
-entities (Profiles, Availability Rules) were built out. The most complex feature—the booking engine—was implemented
-next, incorporating rules, exceptions, and double-booking guards. Finally, auxiliary features such as real-time SSE
-notifications, file uploads, rate limiting, and audit logging were integrated.
+- **Booking:** Patient-row locks prevent overlapping bookings; PostgreSQL slot-level advisory locks serialize requests
+  for the same slot, and a partial unique index prevents duplicate active appointments.
+- **Rescheduling:** `Appointment.version` rejects stale updates; patient and consistently ordered slot locks protect the
+  change, and a failed reschedule preserves the original appointment.
+- **Waitlist:** Partial unique indexes prevent duplicate active entries and multiple offers for one slot. Released slots
+  are offered in queue order for 15 minutes; active offers block ordinary bookings, while decline or expiry advances the
+  queue.
 
-## User Stories
+See the [Concurrency Guide](docs/CONCURRENCY.md) for implementation details.
 
-User stories and project tracking were managed on Trello:
-[View User Stories on Trello](https://trello.com/b/9VwIYDT1/medic)
+### Appointment Notification Delivery
+
+Appointment notifications are saved in the same transaction as the booking, rescheduling, or cancellation. After the
+transaction commits, Medic sends real-time updates through SSE and schedules emails using a thread pool (2 core threads,
+up to 4, with a queue for 100 tasks).
+
+## Project Planning and User Stories
+
+The implementation plan is in [`docs/Project_3_Planning.md`](docs/Project_3_Planning.md). User stories and project
+tracking are maintained on the [Medic Trello board](https://trello.com/b/9VwIYDT1/medic).
 
 ## Entity Relationship Diagram (ERD)
 
@@ -121,42 +133,10 @@ logic.
 Interactive Swagger documentation is available at `http://localhost:8080/swagger-ui.html` when the application is
 running.
 
-### API Endpoints
+## Testing
 
-| Request Type | URL                                               | Functionality                      | Access        |
-|--------------|---------------------------------------------------|------------------------------------|---------------|
-| POST         | `/auth/users/login`                               | User login                         | Public        |
-| POST         | `/auth/users/register/patient`                    | Patient registration               | Public        |
-| POST         | `/auth/users/register/doctor`                     | Doctor registration                | Public        |
-| POST         | `/auth/users/register/admin`                      | Admin registration                 | Admin         |
-| GET          | `/auth/users/verify`                              | Verify email address               | Public        |
-| POST         | `/auth/users/forgot-password`                     | Request password reset             | Public        |
-| POST         | `/auth/users/reset-password`                      | Reset password                     | Public        |
-| POST         | `/auth/users/change-password`                     | Change password                    | Authenticated |
-| POST         | `/auth/users/logout`                              | User logout                        | Authenticated |
-| GET          | `/user`                                           | Retrieve user account              | Authenticated |
-| PATCH        | `/user/avatar`                                    | Upload profile picture             | Authenticated |
-| PATCH        | `/profile/patient`                                | Update patient profile             | Patient       |
-| PATCH        | `/profile/doctor`                                 | Update doctor profile              | Doctor        |
-| GET          | `/patient/appointments`                           | Get patient appointments           | Patient       |
-| POST         | `/patient/appointments`                           | Book an appointment                | Patient       |
-| PUT          | `/patient/appointments/{id}/cancel`               | Cancel an appointment              | Patient       |
-| GET          | `/patient/appointments/doctors/{id}/availability` | View doctor availability           | Patient       |
-| GET          | `/doctors/appointments`                           | Get doctor appointment history     | Doctor        |
-| PATCH        | `/doctors/appointments/{appointmentId}/status`    | Update appointment outcome         | Doctor        |
-| GET          | `/doctors/availability/calendar`                  | Get doctor calendar                | Doctor        |
-| GET          | `/doctors/availability/rules`                     | List availability rules            | Doctor        |
-| POST         | `/doctors/availability/rules`                     | Create availability rule           | Doctor        |
-| PUT          | `/doctors/availability/rules/{id}`                | Update availability rule           | Doctor        |
-| DELETE       | `/doctors/availability/rules/{id}`                | Delete availability rule           | Doctor        |
-| GET          | `/doctors/availability/exceptions`                | List availability exceptions       | Doctor        |
-| POST         | `/doctors/availability/exceptions`                | Create availability exception      | Doctor        |
-| PUT          | `/doctors/availability/exceptions/{id}`           | Update availability exception      | Doctor        |
-| DELETE       | `/doctors/availability/exceptions/{id}`           | Delete availability exception      | Doctor        |
-| GET          | `/notifications/subscribe`                        | Connect to real-time notifications | Authenticated |
-| PATCH        | `/admin/doctors/{id}/verify`                      | Verify a doctor profile            | Admin         |
-| DELETE       | `/admin/users/{userId}`                           | Soft delete a user                 | Admin         |
-| GET          | `/audit-logs`                                     | Get all audit logs                 | Authenticated |
+H2 tests cover business workflows; PostgreSQL/Testcontainers tests cover constraints and concurrency (Docker required).
+Run the suite with `./mvnw test`; see the [Concurrency Guide](docs/CONCURRENCY.md) for details.
 
 ## Installation
 
@@ -182,11 +162,11 @@ Follow these steps to run the application locally:
    DB_URL=jdbc:postgresql://localhost:5432/medic
    DB_USERNAME=postgres
    DB_PASSWORD=your_password
-   MAIL_USERNAME=your_email@gmail.com
-   MAIL_PASSWORD=your_app_password
-   APP_BASE_URL=http://localhost:8080
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
+    MAIL_USERNAME=your_email@gmail.com
+    MAIL_PASSWORD=your_app_password
+    APP_BASE_URL=http://localhost:8080
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
     ```
 
 4. **Start the Application:**
@@ -205,18 +185,23 @@ Follow these steps to run the application locally:
 
 ## Major Challenges
 
-- **Availability Engine:** Calculating precise 15/30-minute appointment slots based on dynamic weekly schedules while
+- **Availability Engine:** Calculating precise 15-minute appointment slots based on dynamic weekly schedules while
   excluding specific date/time exceptions and already booked appointments proved mathematically and logically
   challenging.
+- **Concurrency Control:** Preventing duplicate bookings and patient overlaps required coordinating patient-row locks,
+  exact-slot advisory locks, optimistic versions, and PostgreSQL constraints.
+- **Waitlist Priority:** Releasing a slot and offering it to the next eligible patient had to remain atomic with booking
+  operations so an ordinary request could not take a slot during an active offer.
 
 ## Future Improvements
 
-- **Integration Testing:** Expand test coverage by using the dedicated `test` profile (with the configured in-memory H2
-  database) for comprehensive integration testing, rather than relying solely on mocked unit tests.
+- **Broader API Testing:** Extend the existing H2 and PostgreSQL/Testcontainers suites to cover additional availability,
+  booking, and waitlist edge cases.
 - **Redis Caching for Availability:** Optimize performance by caching the results of `computeAvailableSlots` in Redis.
   This cache will be strategically invalidated and refreshed only when a doctor updates their availability rules or
   exceptions.
-- **Frontend:** Implement a complete frontend application (React) to consume the API.
+- **Durable Email Delivery:** Add a transactional outbox and retry mechanism so committed notifications can be emailed
+  after a process restart or temporary mail-service failure.
 
 ## Credits & Resources
 
@@ -236,3 +221,5 @@ Follow these steps to run the application locally:
 - Server-Sent Events
   (SSE): [Medium](https://medium.com/@vishalpriyadarshi/real-time-event-streaming-in-spring-boot-using-server-sent-events-sse-a-guide-for-modern-f1048d3f5796)
 - Spring Data JPA Specification: [Dev.to](https://dev.to/saladlam/spring-data-jpa-about-specification-interface-56ed)
+- AI assistance: [OpenAI ChatGPT](https://chatgpt.com/) was used for learning and code enhancement; suggestions were
+  reviewed against the application.

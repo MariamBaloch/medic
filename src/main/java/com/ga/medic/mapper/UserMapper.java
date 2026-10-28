@@ -7,6 +7,8 @@ import com.ga.medic.model.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.util.List;
+
 @Mapper(config = GlobalMapperConfig.class,
         uses = {DoctorProfileMapper.class, PatientProfileMapper.class})
 public interface UserMapper {
@@ -20,4 +22,6 @@ public interface UserMapper {
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
     UserAccountResponse toResponse(User user);
+
+    List<UserAccountResponse> toResponses(List<User> users);
 }

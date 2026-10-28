@@ -22,4 +22,7 @@ public class AppointmentFilterRequest {
 
     @Schema(description = "Appointment status")
     private AppointmentStatusEnum status;
+
+    @Schema(description = "Doctor's medical specialization ID", example = "1")
+    private Long specializationId;
 }

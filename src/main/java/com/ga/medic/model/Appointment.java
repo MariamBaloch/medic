@@ -5,13 +5,14 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "appointment", uniqueConstraints = @UniqueConstraint(name = "uc_appointment_doctor_date_time", columnNames = {"doctor_id", "appointment_date", "start_time"}))
+@Table(name = "appointment")
 public class Appointment extends Auditable {
 
     @Id
@@ -35,6 +36,9 @@ public class Appointment extends Auditable {
     @Column(nullable = false)
     private LocalTime endTime;
 
+    @Column(precision = 10, scale = 2)
+    private BigDecimal bookingFee;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AppointmentStatusEnum status = AppointmentStatusEnum.BOOKED;
@@ -44,6 +48,10 @@ public class Appointment extends Auditable {
 
     @Column(length = 255)
     private String cancelledReason;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "availability_rule_id")

@@ -3,18 +3,14 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.*;
 import com.ga.medic.enums.AppointmentStatusEnum;
+import com.ga.medic.enums.AvailableSlotStatusEnum;
+import com.ga.medic.enums.WaitlistStatusEnum;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AvailabilityRuleMapper;
-import com.ga.medic.model.Appointment;
-import com.ga.medic.model.AvailabilityException;
-import com.ga.medic.model.AvailabilityRule;
-import com.ga.medic.model.DoctorProfile;
-import com.ga.medic.repository.AppointmentRepository;
-import com.ga.medic.repository.AvailabilityExceptionRepository;
-import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
+import com.ga.medic.model.*;
+import com.ga.medic.repository.*;
 import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,10 +27,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AvailabilityRuleService {
 
+    private static final DateTimeFormatter DISPLAY_TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+
     private final AvailabilityRuleRepository ruleRepository;
     private final AuthenticatedUser authenticatedUser;
     private final AvailabilityRuleMapper ruleMapper;
     private final AppointmentRepository appointmentRepository;
+    private final AppointmentWaitlistEntryRepository waitlistEntryRepository;
     private final AppointmentMapper appointmentMapper;
     private final AvailabilityExceptionRepository exceptionRepository;
     private final DoctorProfileRepository doctorProfileRepository;
@@ -168,7 +168,7 @@ public class AvailabilityRuleService {
     public DoctorCalendarResponse getCalendar(LocalDate from, LocalDate to) {
         DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
 
-        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to);
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to, null, null).slots();
 
         List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctor.getId(), from, to);
 
@@ -176,19 +176,104 @@ public class AvailabilityRuleService {
     }
 
     /**
-     * Returns unbooked slots after validating the doctor and applying rules, exceptions, and current appointments.
+     * Returns valid scheduled slots after applying the doctor's rules, exceptions, and current slot state.
      *
      * @param doctorId the doctor's profile ID
      * @param from     the first date to include
      * @param to       the last date to include
-     * @return the doctor's available slots in the date range
+     * @return all valid future scheduled slots in the date range, including booked and offered slots
      */
     @Transactional
     public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to) {
+        return getAvailability(doctorId, from, to, null);
+    }
+
+    /**
+     * Returns dynamically calculated available slots, optionally ignoring one existing appointment.
+     * The exclusion is used when validating a reschedule so the appointment does not block its own target slot.
+     */
+    @Transactional
+    public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to,
+                                                       Long excludedAppointmentId) {
         if (!doctorProfileRepository.existsById(doctorId)) {
             throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
         }
-        return computeAvailableSlots(doctorId, from, to);
+        return computeAvailableSlots(doctorId, from, to, excludedAppointmentId, null).slots();
+    }
+
+    /**
+     * Returns scheduled slots with waitlist eligibility calculated for the authenticated patient.
+     */
+    @Transactional(readOnly = true)
+    public DoctorAvailabilityResponse getAvailabilityForPatient(Long doctorId, LocalDate from, LocalDate to) {
+        if (!doctorProfileRepository.existsById(doctorId)) {
+            throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
+        }
+        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
+        if (patient == null) {
+            throw new InformationNotFoundException("Patient profile not found.");
+        }
+        ComputedAvailability availability = computeAvailableSlots(doctorId, from, to, null, patient.getId());
+        List<PatientAppointmentCalendarResponse> patientAppointments = availability.patientAppointments().stream()
+                .map(appointment -> new PatientAppointmentCalendarResponse(
+                        appointment.getId(), appointment.getDoctor().getUser().getFullName(),
+                        appointment.getAppointmentDate(), appointment.getStartTime(), appointment.getEndTime(),
+                        appointment.getReason()))
+                .toList();
+        return new DoctorAvailabilityResponse(availability.slots(), patientAppointments);
+    }
+
+    /**
+     * Returns one day's dynamically calculated availability grouped into contiguous time ranges.
+     * The start/end values remain machine-readable; displayRange is formatted for client presentation.
+     */
+    @Transactional(readOnly = true)
+    public DoctorDailyAvailabilityResponse getDailyAvailabilityForAuthenticatedDoctor(LocalDate date) {
+        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        if (doctor == null) {
+            throw new InformationNotFoundException("Doctor profile not found.");
+        }
+
+        Long doctorId = doctor.getId();
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctorId, date, date, null, null).slots().stream()
+                .filter(slot -> slot.status() == AvailableSlotStatusEnum.AVAILABLE).toList();
+        return new DoctorDailyAvailabilityResponse(doctorId, date, mergeAdjacentSlots(slots));
+    }
+
+    private List<AvailableTimeRangeResponse> mergeAdjacentSlots(List<AvailableSlotResponse> slots) {
+        if (slots.isEmpty()) {
+            return List.of();
+        }
+
+        List<AvailableTimeRangeResponse> ranges = new ArrayList<>();
+        LocalTime rangeStart = slots.get(0).startTime();
+        LocalTime rangeEnd = slots.get(0).endTime();
+        int slotMinutes = slots.get(0).slotMinutes();
+
+        for (int index = 1; index < slots.size(); index++) {
+            AvailableSlotResponse slot = slots.get(index);
+            boolean contiguous = !slot.startTime().isAfter(rangeEnd);
+
+            if (contiguous && slot.slotMinutes() == slotMinutes) {
+                if (slot.endTime().isAfter(rangeEnd)) {
+                    rangeEnd = slot.endTime();
+                }
+                continue;
+            }
+
+            ranges.add(toTimeRange(rangeStart, rangeEnd, slotMinutes));
+            rangeStart = slot.startTime();
+            rangeEnd = slot.endTime();
+            slotMinutes = slot.slotMinutes();
+        }
+
+        ranges.add(toTimeRange(rangeStart, rangeEnd, slotMinutes));
+        return List.copyOf(ranges);
+    }
+
+    private AvailableTimeRangeResponse toTimeRange(LocalTime startTime, LocalTime endTime, int slotMinutes) {
+        String displayRange = startTime.format(DISPLAY_TIME_FORMAT) + " - " + endTime.format(DISPLAY_TIME_FORMAT);
+        return new AvailableTimeRangeResponse(startTime, endTime, slotMinutes, displayRange);
     }
 
     /**
@@ -237,27 +322,19 @@ public class AvailabilityRuleService {
 
 
     /**
-     * Computes available slots using the doctor's rules, exceptions, and active appointments.
-     *
-     * @param doctorId the doctor's profile ID
-     * @param from     the first date to include
-     * @param to       the last date to include
-     * @return sorted available slots in the date range
+     * Generates valid scheduled slots first, then enriches them with booking and patient-specific state.
      */
-    private List<AvailableSlotResponse> computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to) {
+    private ComputedAvailability computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to,
+                                                       Long excludedAppointmentId, Long patientId) {
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();
 
         List<AvailabilityRule> rules = ruleRepository.findByDoctorIdAndDateRange(doctorId, from, to);
         List<AvailabilityException> exceptions = exceptionRepository.findByDoctorAndDateRange(doctorId, from, to);
-        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
-
-        // Store appointment keys for quick lookup
-        Set<String> appointmentKeys = appointments.stream().map(a -> a.getAppointmentDate() + "|" + a.getStartTime()).collect(Collectors.toSet());
 
         // Tracks slots already added to results. Prevents the same slot appearing twice in case two overlapping rules generate it
         Set<SlotKey> seenSlots = new HashSet<>();
-        List<AvailableSlotResponse> availableSlots = new ArrayList<>();
+        List<AvailableSlotResponse> scheduledSlots = new ArrayList<>();
 
         for (AvailabilityRule rule : rules) {
             // if rule starts before requested period, use requested period start
@@ -284,12 +361,6 @@ public class AvailabilityRuleService {
                         continue;
                     }
 
-                    // Skip if already booked
-                    if (appointmentKeys.contains(slotDate + "|" + slotStart)) {
-                        startTimePointer = slotEnd;
-                        continue;
-                    }
-
                     // Skip if in an exception window
                     boolean inException = exceptions.stream().anyMatch(ex -> {
                         if (!ex.getExceptionDate().equals(slotDate)) return false;
@@ -306,7 +377,7 @@ public class AvailabilityRuleService {
 
                     // Skip if same slot has already been added by another rule
                     if (seenSlots.add(new SlotKey(slotDate, slotStart))) {
-                        availableSlots.add(new AvailableSlotResponse(rule.getId(), slotDate, slotStart, slotEnd, slotMinutes));
+                        scheduledSlots.add(new AvailableSlotResponse(rule.getId(), slotDate, slotStart, slotEnd, slotMinutes));
                     }
 
                     startTimePointer = slotEnd;
@@ -314,8 +385,63 @@ public class AvailabilityRuleService {
             }
         }
 
-        availableSlots.sort(Comparator.comparing(AvailableSlotResponse::date).thenComparing(AvailableSlotResponse::startTime));
-        return availableSlots;
+        List<Appointment> patientAppointments = patientId == null
+                ? List.of()
+                : appointmentRepository.findActiveByPatientAndDateRange(patientId, from, to);
+
+        if (scheduledSlots.isEmpty()) {
+            return new ComputedAvailability(List.of(), patientAppointments);
+        }
+
+        // Determine booking and waitlist status after generating all valid scheduled slots.
+        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
+        Set<SlotKey> appointmentKeys = appointments.stream()
+                .filter(appointment -> !Objects.equals(appointment.getId(), excludedAppointmentId))
+                .map(appointment -> new SlotKey(appointment.getAppointmentDate(), appointment.getStartTime()))
+                .collect(Collectors.toSet());
+        Set<SlotKey> offeredKeys = waitlistEntryRepository
+                .findAllByDoctor_IdAndAppointmentDateBetweenAndStatus(doctorId, from, to, WaitlistStatusEnum.OFFERED)
+                .stream()
+                .map(entry -> new SlotKey(entry.getAppointmentDate(), entry.getPreferredStartTime()))
+                .collect(Collectors.toSet());
+
+        Set<SlotKey> patientWaitlistKeys = patientId == null
+                ? Set.of()
+                : waitlistEntryRepository.findAllByPatient_IdAndDoctor_IdAndAppointmentDateBetweenAndStatusIn(
+                        patientId, doctorId, from, to, List.of(WaitlistStatusEnum.WAITING, WaitlistStatusEnum.OFFERED))
+                .stream()
+                .map(entry -> new SlotKey(entry.getAppointmentDate(), entry.getPreferredStartTime()))
+                .collect(Collectors.toSet());
+
+        List<AvailableSlotResponse> slots = new ArrayList<>(scheduledSlots.size());
+        for (AvailableSlotResponse scheduledSlot : scheduledSlots) {
+            SlotKey key = new SlotKey(scheduledSlot.date(), scheduledSlot.startTime());
+            AvailableSlotStatusEnum status = offeredKeys.contains(key)
+                    ? AvailableSlotStatusEnum.WAITLIST_OFFERED
+                    : appointmentKeys.contains(key)
+                    ? AvailableSlotStatusEnum.BOOKED
+                    : AvailableSlotStatusEnum.AVAILABLE;
+            boolean patientHasOverlappingAppointment = patientAppointments.stream()
+                    .filter(appointment -> !Objects.equals(appointment.getId(), excludedAppointmentId))
+                    .anyMatch(appointment -> appointment.getAppointmentDate().equals(scheduledSlot.date())
+                            && appointment.getStartTime().isBefore(scheduledSlot.endTime())
+                            && appointment.getEndTime().isAfter(scheduledSlot.startTime()));
+            boolean patientHasActiveWaitlistEntry = patientWaitlistKeys.contains(key);
+            boolean canJoinWaitlist = patientId != null
+                    && status != AvailableSlotStatusEnum.AVAILABLE
+                    && !patientHasOverlappingAppointment
+                    && !patientHasActiveWaitlistEntry;
+
+            slots.add(new AvailableSlotResponse(scheduledSlot.ruleId(), scheduledSlot.date(),
+                    scheduledSlot.startTime(), scheduledSlot.endTime(), scheduledSlot.slotMinutes(), status,
+                    canJoinWaitlist, patientHasOverlappingAppointment, patientHasActiveWaitlistEntry));
+        }
+
+        slots.sort(Comparator.comparing(AvailableSlotResponse::date).thenComparing(AvailableSlotResponse::startTime));
+        return new ComputedAvailability(slots, patientAppointments);
+    }
+
+    private record ComputedAvailability(List<AvailableSlotResponse> slots, List<Appointment> patientAppointments) {
     }
 
     private record SlotKey(LocalDate date, LocalTime startTime) {

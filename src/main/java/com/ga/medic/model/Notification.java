@@ -30,7 +30,7 @@ public class Notification extends Auditable {
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
     @Column(nullable = false)

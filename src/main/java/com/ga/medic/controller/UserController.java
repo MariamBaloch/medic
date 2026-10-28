@@ -1,10 +1,12 @@
 package com.ga.medic.controller;
 
+import com.ga.medic.dto.request.UserAccountUpdateRequest;
 import com.ga.medic.dto.response.UserAccountResponse;
 import com.ga.medic.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,5 +39,13 @@ public class UserController {
     @GetMapping
     public UserAccountResponse getUserAccount() {
         return userService.getUserAccount();
+    }
+
+    @Operation(summary = "Update User Account",
+            description = "Updates the authenticated user's first name, last name, date of birth, phone, and gender. Email is not editable through this endpoint.")
+    @PutMapping
+    public ResponseEntity<UserAccountResponse> updateUserAccount(
+            @Valid @RequestBody UserAccountUpdateRequest request) {
+        return ResponseEntity.ok(userService.updateUserAccount(request));
     }
 }

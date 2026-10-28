@@ -8,10 +8,11 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
-@Mapper(config = GlobalMapperConfig.class)
+@Mapper(config = GlobalMapperConfig.class, uses = SpecializationMapper.class)
 public interface DoctorProfileMapper {
 
-    @Mapping(target = "specializationId", source = "specialization.id")
+    @Mapping(target = "doctorProfileId", source = "id")
+    @Mapping(target = "specialization", source = "specialization")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
     DoctorProfileResponse toDoctorProfileResponse(DoctorProfile doctorProfile);

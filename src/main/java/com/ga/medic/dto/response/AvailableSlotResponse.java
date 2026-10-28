@@ -1,12 +1,13 @@
 package com.ga.medic.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ga.medic.enums.AvailableSlotStatusEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-@Schema(description = "A single available time slot")
+@Schema(description = "A valid scheduled time slot and its current booking state")
 public record AvailableSlotResponse(
         @Schema(description = "Available rule id", example = "1")
         Long ruleId,
@@ -24,6 +25,22 @@ public record AvailableSlotResponse(
         LocalTime endTime,
 
         @Schema(description = "Duration in minutes", example = "30")
-        int slotMinutes
+        int slotMinutes,
+
+        @Schema(description = "Current slot state", example = "AVAILABLE",
+                allowableValues = {"AVAILABLE", "BOOKED", "WAITLIST_OFFERED"})
+        AvailableSlotStatusEnum status,
+
+        @Schema(description = "Whether the authenticated patient may join the waitlist for this slot", example = "true")
+        boolean canJoinWaitlist,
+
+        @Schema(description = "Whether the authenticated patient has an overlapping appointment", example = "false")
+        boolean patientHasOverlappingAppointment,
+
+        @Schema(description = "Whether the authenticated patient already has a WAITING or OFFERED entry for this slot", example = "false")
+        boolean patientHasActiveWaitlistEntry
 ) {
+    public AvailableSlotResponse(Long ruleId, LocalDate date, LocalTime startTime, LocalTime endTime, int slotMinutes) {
+        this(ruleId, date, startTime, endTime, slotMinutes, AvailableSlotStatusEnum.AVAILABLE, false, false, false);
+    }
 }

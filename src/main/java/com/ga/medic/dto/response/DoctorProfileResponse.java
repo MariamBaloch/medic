@@ -5,8 +5,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 public record DoctorProfileResponse(
-        @Schema(description = "Medical specialization ID", example = "1")
-        Long specializationId,
+        @Schema(description = "Doctor profile ID", example = "1")
+        Long doctorProfileId,
+
+        @Schema(description = "Medical specialization details")
+        SpecializationResponse specialization,
 
         @Schema(description = "Doctor's qualification", example = "MBBS, MD")
         String qualification,

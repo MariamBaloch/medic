@@ -1,32 +1,95 @@
 package com.ga.medic.service;
 
+import com.ga.medic.dto.response.MarkAllNotificationsReadResponse;
 import com.ga.medic.dto.response.NotificationResponse;
+import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.dto.response.UnreadNotificationCountResponse;
 import com.ga.medic.enums.NotificationAction;
 import com.ga.medic.enums.NotificationType;
+import com.ga.medic.event.NotificationDispatchEvent;
+import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.NotificationMapper;
+import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.Notification;
 import com.ga.medic.model.User;
 import com.ga.medic.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
 
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Sort NEWEST_FIRST_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+
     private final NotificationMapper notificationMapper;
+    private final PageMapper pageMapper;
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
+    private final ApplicationEventPublisher eventPublisher;
+    @Qualifier("notificationEmailExecutor")
+    private final ExecutorService notificationEmailExecutor;
     // Map to hold userId and all active SseEmitters for that user for multiple connections
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
+
+    @Transactional(readOnly = true)
+    public PageResponse<NotificationResponse> getNotifications(Long userId, Pageable pageable, boolean unreadOnly) {
+        if (pageable == null || pageable.isUnpaged() || pageable.getPageNumber() < 0) {
+            throw new IllegalArgumentException("Page must be zero or greater");
+        }
+        if (pageable.getPageSize() < 1 || pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+
+        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : NEWEST_FIRST_SORT;
+        Pageable pageRequest = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        Page<Notification> notifications = unreadOnly
+                ? notificationRepository.findUnreadByUserId(userId, pageRequest)
+                : notificationRepository.findByUserId(userId, pageRequest);
+        return pageMapper.toResponse(notifications, notificationMapper::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public UnreadNotificationCountResponse getUnreadCount(Long userId) {
+        return new UnreadNotificationCountResponse(notificationRepository.countByUserIdAndReadFalse(userId));
+    }
+
+    @Transactional
+    public NotificationResponse markAsRead(Long userId, Long notificationId) {
+        Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new InformationNotFoundException("Notification not found"));
+        if (!notification.isRead()) {
+            notification.setRead(true);
+            notification = notificationRepository.save(notification);
+        }
+        return notificationMapper.toResponse(notification);
+    }
+
+    @Transactional
+    public MarkAllNotificationsReadResponse markAllAsRead(Long userId) {
+        return new MarkAllNotificationsReadResponse(notificationRepository.markAllReadByUserId(userId));
+    }
 
     /**
      * Opens a server-sent-events connection and tracks it for the user's live notifications.
@@ -54,12 +117,11 @@ public class NotificationService {
     /**
      * Sends a notification to every active event-stream connection for the user.
      *
-     * @param userId the ID of the notification recipient
+     * @param userId       the ID of the notification recipient
      * @param notification the notification to send
      */
     public void sendNotification(Long userId, NotificationResponse notification) {
         Set<SseEmitter> userEmitters = emitters.get(userId);
-        log.info("Sending notification to userId {}: {}", userId, notification);
 
         if (userEmitters == null) {
             return;
@@ -68,8 +130,10 @@ public class NotificationService {
         for (SseEmitter emitter : userEmitters) {
             try {
                 emitter.send(SseEmitter.event().name("notification").data(notification));
-                log.info("Notification sent to userId {}: {}", userId, notification);
-            } catch (IOException e) {
+                log.debug("SSE notification sent: userId={}, notificationId={}", userId, notification.id());
+            } catch (IOException | RuntimeException exception) {
+                log.warn("Removing failed SSE connection: userId={}, notificationId={}",
+                        userId, notification.id(), exception);
                 removeEmitter(userId, emitter);
             }
         }
@@ -78,7 +142,7 @@ public class NotificationService {
     /**
      * Removes a closed event stream and drops the user's entry when no streams remain.
      *
-     * @param userId the ID of the stream's user
+     * @param userId  the ID of the stream's user
      * @param emitter the event stream to remove
      */
     private void removeEmitter(Long userId, SseEmitter emitter) {
@@ -94,43 +158,64 @@ public class NotificationService {
     }
 
     /**
-     * Persists a notification before delivering it to the user's active event-stream connections.
+     * Persists a notification in the caller's transaction and schedules delivery after commit.
      *
-     * @param user the notification recipient
-     * @param type the notification category
-     * @param action the action associated with the notification
-     * @param title the notification title
-     * @param message the notification body
-     * @param read whether the notification is initially marked as read
+     * @param user            the notification recipient
+     * @param type            the notification category
+     * @param action          the action associated with the notification
+     * @param title           the notification title
+     * @param message         the notification body
+     * @param read            whether the notification is initially marked as read
      * @param relatedEntityId the ID of the related entity, if any
      */
-    public void createAndSend(User user, NotificationType type, NotificationAction action, String title, String message, boolean read, Long relatedEntityId
-    ) {
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void createAndSend(User user, NotificationType type, NotificationAction action, String title,
+                              String message, boolean read, Long relatedEntityId) {
         Notification notification = notificationMapper.toNotification(user, type, action, title, message, read, relatedEntityId);
-        notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
         NotificationResponse response = notificationMapper.toResponse(notification);
-        sendNotification(user.getId(), response);
-        sendEmailNotification(user, type, action, title, message, relatedEntityId);
+        eventPublisher.publishEvent(new NotificationDispatchEvent(
+                user.getId(), user.getEmail(), user.getFullName(), response
+        ));
     }
 
-    private void sendEmailNotification(User user, NotificationType type, NotificationAction action, String title,
-                                       String message, Long relatedEntityId) {
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void dispatchAfterCommit(NotificationDispatchEvent event) {
+        sendNotification(event.userId(), event.notification());
+
+        try {
+            notificationEmailExecutor.execute(() -> sendEmailNotification(event));
+            log.info("Submitted notification email: notificationId={}, userId={}",
+                    event.notification().id(), event.userId());
+        } catch (RejectedExecutionException exception) {
+            log.error("Could not submit notification email: notificationId={}, userId={}",
+                    event.notification().id(), event.userId(), exception);
+        }
+    }
+
+    private void sendEmailNotification(NotificationDispatchEvent event) {
+        NotificationResponse notification = event.notification();
+        String deliveryThreadName = Thread.currentThread().getName();
         try {
             emailService.sendTemplateEmail(
-                    user.getEmail(),
-                    title,
+                    event.recipientEmail(),
+                    notification.title(),
                     "email/notification",
                     Map.of(
-                            "fullName", user.getFullName(),
-                            "title", title,
-                            "message", message,
-                            "type", type,
-                            "action", action,
-                            "relatedEntityId", relatedEntityId == null ? "" : relatedEntityId
+                            "fullName", event.recipientName(),
+                            "title", notification.title(),
+                            "message", notification.message(),
+                            "type", notification.type(),
+                            "action", notification.action(),
+                            "relatedEntityId", notification.relatedEntityId() == null
+                                    ? "" : notification.relatedEntityId()
                     )
             );
-        } catch (RuntimeException e) {
-            log.warn("Failed to send email notification to userId {}", user.getId(), e);
+            log.info("Notification email sent: notificationId={}, userId={}, threadName={}",
+                    notification.id(), event.userId(), deliveryThreadName);
+        } catch (RuntimeException exception) {
+            log.warn("Notification email failed: notificationId={}, userId={}, threadName={}",
+                    notification.id(), event.userId(), deliveryThreadName, exception);
         }
     }
 }
