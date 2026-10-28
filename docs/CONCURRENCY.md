@@ -74,21 +74,30 @@ submitted.
 
 ## Tests
 
-- `AppointmentConcurrencyIntegrationTest`: PostgreSQL HTTP tests for same-slot races, independent bookings, patient
-  overlaps, stale-version reschedules, booking/rescheduling races, and cancellation followed by rebooking.
-- `AppointmentConstraintIntegrationTest`: verifies that a violation of the PostgreSQL active-slot index returns
-  `409 Conflict`.
+- `AppointmentWaitlistH2Test`: checks queue priority after cancellation, the offer window, declining an offer, handoff
+  to
+  the next patient, and booking after acceptance.
 - `AppointmentRescheduleH2Test`: checks rescheduling updates and versions, past and completed appointments, and rollback
-  behavior. H2 tests cover business rules; PostgreSQL tests verify database locking and indexes.
+  behavior.
+- `AppointmentConcurrencyIntegrationTest` (PostgreSQL/Testcontainers): covers same-slot booking races, the advisory lock
+  blocking on the same slot while allowing a different slot for the same doctor, patient-overlap and rescheduling races,
+  cancellation/rebooking, and rejection of ordinary booking while an offer is active.
+- `AppointmentConstraintIntegrationTest` (PostgreSQL/Testcontainers): verifies the appointment active-slot index maps to
+  `409 Conflict`, multiple patients can wait for one slot, and the partial indexes reject duplicate active entries and
+  simultaneous offers.
 
-Run all tests with:
+H2 tests cover business behavior. PostgreSQL tests verify database constraints, advisory locking, and races.
+
+Run the full test suite with the Maven wrapper:
 
 ```bash
-./mvnw.cmd clean test
+./mvnw test
 ```
 
-PostgreSQL tests use Testcontainers and require Docker. To run only the PostgreSQL appointment tests:
+In Windows PowerShell, use `.\mvnw.cmd test`.
 
-```bash
-./mvnw -Dtest=AppointmentConcurrencyIntegrationTest,AppointmentConstraintIntegrationTest test
+PostgreSQL tests use Testcontainers and require Docker. Run all PostgreSQL appointment integration tests with:
+
+```powershell
+.\mvnw.cmd '-Dtest=AppointmentConcurrencyIntegrationTest,AppointmentConstraintIntegrationTest' test
 ```
