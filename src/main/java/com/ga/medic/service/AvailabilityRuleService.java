@@ -5,14 +5,19 @@ import com.ga.medic.dto.response.*;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.AvailableSlotStatusEnum;
 import com.ga.medic.enums.WaitlistStatusEnum;
+import com.ga.medic.event.DoctorScheduleChangedEvent;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AvailabilityRuleMapper;
 import com.ga.medic.model.*;
-import com.ga.medic.repository.*;
+import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AppointmentWaitlistEntryRepository;
+import com.ga.medic.repository.AvailabilityRuleRepository;
+import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +25,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,8 +41,9 @@ public class AvailabilityRuleService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentWaitlistEntryRepository waitlistEntryRepository;
     private final AppointmentMapper appointmentMapper;
-    private final AvailabilityExceptionRepository exceptionRepository;
     private final DoctorProfileRepository doctorProfileRepository;
+    private final DoctorWeeklyScheduleCacheService weeklyScheduleCacheService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Returns all current and future availability rules for the logged-in doctor.
@@ -64,6 +71,7 @@ public class AvailabilityRuleService {
         AvailabilityRule rule = ruleMapper.toEntity(request);
         rule.setDoctor(doctor);
         rule = ruleRepository.save(rule);
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(rule), null, null);
     }
 
@@ -104,6 +112,8 @@ public class AvailabilityRuleService {
             ruleRepository.save(rule);
             hardDeleted = false;
         }
+
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
 
         List<AppointmentResponse> affectedAppointmentResponses = appointmentMapper.toResponseList(affectedAppointments);
         return new AvailabilityRuleDeleteResponse(hardDeleted, affectedAppointmentResponses, message);
@@ -152,6 +162,9 @@ public class AvailabilityRuleService {
 
             affectedAppointments = findAppointmentsOutsideRule(ruleId, newRule);
         }
+
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+
         List<AppointmentResponse> affectedAppointmentResponseList = affectedAppointments.isEmpty() ? null : appointmentMapper.toResponseList(affectedAppointments);
         String message = (affectedAppointmentResponseList != null) ? affectedAppointmentResponseList.size() + " existing appointment(s) outside the new schedule were kept" : null;
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(existing), affectedAppointmentResponseList, message);
@@ -322,6 +335,35 @@ public class AvailabilityRuleService {
 
 
     /**
+     * Retrieves schedule-only slots from the weekly cache and filters past dates and times afterwards.
+     */
+    private List<DoctorScheduledSlot> getScheduledSlots(Long doctorId, LocalDate from, LocalDate to, LocalDate today, LocalTime now) {
+        if (from.isAfter(to)) {
+            return List.of();
+        }
+
+        LocalDate firstWeek = from.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate lastWeek = to.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        List<DoctorScheduledSlot> scheduledSlots = new ArrayList<>();
+        for (LocalDate weekStart = firstWeek; !weekStart.isAfter(lastWeek); weekStart = weekStart.plusWeeks(1)) {
+            for (DoctorScheduledSlot slot : weeklyScheduleCacheService.getWeekSchedule(doctorId, weekStart)) {
+                if (slot.date().isBefore(from) || slot.date().isAfter(to)) {
+                    continue;
+                }
+                if (slot.date().isBefore(today)) {
+                    continue;
+                }
+                if (slot.date().equals(today) && slot.startTime().isBefore(now)) {
+                    continue;
+                }
+                scheduledSlots.add(slot);
+            }
+        }
+        return scheduledSlots;
+    }
+
+    /**
      * Generates valid scheduled slots first, then enriches them with booking and patient-specific state.
      */
     private ComputedAvailability computeAvailableSlots(Long doctorId, LocalDate from, LocalDate to,
@@ -329,61 +371,7 @@ public class AvailabilityRuleService {
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();
 
-        List<AvailabilityRule> rules = ruleRepository.findByDoctorIdAndDateRange(doctorId, from, to);
-        List<AvailabilityException> exceptions = exceptionRepository.findByDoctorAndDateRange(doctorId, from, to);
-
-        // Tracks slots already added to results. Prevents the same slot appearing twice in case two overlapping rules generate it
-        Set<SlotKey> seenSlots = new HashSet<>();
-        List<AvailableSlotResponse> scheduledSlots = new ArrayList<>();
-
-        for (AvailabilityRule rule : rules) {
-            // if rule starts before requested period, use requested period start
-            LocalDate ruleStartDate = rule.getStartDate().isBefore(from) ? from : rule.getStartDate();
-            // if rule ends after requested period, use requested period end
-            LocalDate ruleEndDate = (rule.getEndDate() != null && rule.getEndDate().isBefore(to)) ? rule.getEndDate() : to;
-
-            for (LocalDate day = ruleStartDate; !day.isAfter(ruleEndDate); day = day.plusDays(1)) {
-                if (!rule.getDaysOfWeek().contains(day.getDayOfWeek())) continue;
-                if (day.isBefore(today)) continue;
-
-                int slotMinutes = rule.getSlotMinutes();
-                LocalTime startTimePointer = rule.getStartTime();
-
-                // generate slots from rule start time will end time in slot minute intervals
-                while (!startTimePointer.plusMinutes(slotMinutes).isAfter(rule.getEndTime())) {
-                    LocalTime slotEnd = startTimePointer.plusMinutes(slotMinutes);
-                    final LocalDate slotDate = day;
-                    final LocalTime slotStart = startTimePointer;
-
-                    // Skip past slots on today
-                    if (slotDate.equals(today) && slotStart.isBefore(now)) {
-                        startTimePointer = slotEnd;
-                        continue;
-                    }
-
-                    // Skip if in an exception window
-                    boolean inException = exceptions.stream().anyMatch(ex -> {
-                        if (!ex.getExceptionDate().equals(slotDate)) return false;
-                        // Whole-day exception
-                        if (ex.getStartTime() == null && ex.getEndTime() == null) return true;
-                        // Time-window exception: slot interval overlaps exception window
-                        return slotStart.isBefore(ex.getEndTime()) && slotEnd.isAfter(ex.getStartTime());
-                    });
-
-                    if (inException) {
-                        startTimePointer = slotEnd;
-                        continue;
-                    }
-
-                    // Skip if same slot has already been added by another rule
-                    if (seenSlots.add(new SlotKey(slotDate, slotStart))) {
-                        scheduledSlots.add(new AvailableSlotResponse(rule.getId(), slotDate, slotStart, slotEnd, slotMinutes));
-                    }
-
-                    startTimePointer = slotEnd;
-                }
-            }
-        }
+        List<DoctorScheduledSlot> scheduledSlots = getScheduledSlots(doctorId, from, to, today, now);
 
         List<Appointment> patientAppointments = patientId == null
                 ? List.of()
@@ -414,7 +402,7 @@ public class AvailabilityRuleService {
                 .collect(Collectors.toSet());
 
         List<AvailableSlotResponse> slots = new ArrayList<>(scheduledSlots.size());
-        for (AvailableSlotResponse scheduledSlot : scheduledSlots) {
+        for (DoctorScheduledSlot scheduledSlot : scheduledSlots) {
             SlotKey key = new SlotKey(scheduledSlot.date(), scheduledSlot.startTime());
             AvailableSlotStatusEnum status = offeredKeys.contains(key)
                     ? AvailableSlotStatusEnum.WAITLIST_OFFERED

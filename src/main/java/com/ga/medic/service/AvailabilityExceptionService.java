@@ -3,6 +3,7 @@ package com.ga.medic.service;
 import com.ga.medic.dto.request.AvailabilityExceptionRequest;
 import com.ga.medic.dto.response.AvailabilityExceptionDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityExceptionResponse;
+import com.ga.medic.event.DoctorScheduleChangedEvent;
 import com.ga.medic.exception.InformationExistsException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AvailabilityExceptionMapper;
@@ -13,6 +14,7 @@ import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityExceptionRepository;
 import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class AvailabilityExceptionService {
     private final AvailabilityExceptionMapper exceptionMapper;
     private final AppointmentRepository appointmentRepository;
     private final AuthenticatedUser authenticatedUser;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Retrieves current and future availability exceptions for the authenticated doctor.
@@ -61,7 +64,7 @@ public class AvailabilityExceptionService {
      * Updates an existing availability exception for the authenticated doctor.
      *
      * @param exceptionId the ID of the exception to update
-     * @param request the replacement date and optional time window
+     * @param request     the replacement date and optional time window
      * @return the updated exception and any appointments it affects
      */
     @Transactional
@@ -79,13 +82,14 @@ public class AvailabilityExceptionService {
     /**
      * Saves an exception and builds a response that includes appointments affected by it.
      *
-     * @param request the date and optional time window of the exception
-     * @param doctor the doctor who owns the exception
+     * @param request  the date and optional time window of the exception
+     * @param doctor   the doctor who owns the exception
      * @param existing the new or updated exception to save
      * @return the saved exception response and affected appointment details
      */
     private AvailabilityExceptionResponse getAvailabilityExceptionResponse(AvailabilityExceptionRequest request, DoctorProfile doctor, AvailabilityException existing) {
         existing = exceptionRepository.save(existing);
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
 
         List<Appointment> affectedAppointments;
         if (request.startTime() == null) {
@@ -120,6 +124,7 @@ public class AvailabilityExceptionService {
         }
 
         exceptionRepository.delete(exception);
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
 
         String message = affectedAppointments.isEmpty() ? null : affectedAppointments.size() + " existing appointment(s) are affected by the deleted exception but were kept";
 
@@ -129,8 +134,8 @@ public class AvailabilityExceptionService {
     /**
      * Rejects an exception that overlaps another exception for the same doctor and date.
      *
-     * @param doctorId the doctor's profile ID
-     * @param request the exception window to check
+     * @param doctorId  the doctor's profile ID
+     * @param request   the exception window to check
      * @param excludeId the existing exception ID to ignore, or null when creating an exception
      */
     private void checkExceptionOverlap(Long doctorId, AvailabilityExceptionRequest request, Long excludeId) {
