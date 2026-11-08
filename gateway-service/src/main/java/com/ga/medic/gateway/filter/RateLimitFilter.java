@@ -22,8 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 /**
- * Redis-backed rate limiting for authentication endpoints.
- * Moved from the monolith with the same path rules and 429 response body.
+ * Redis-backed rate limiting for authentication endpoints:
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -33,6 +32,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final LettuceBasedProxyManager<byte[]> proxyManager;
     private final RateLimiterConfig rateLimiterConfig;
+
+    static boolean isRateLimited(String path) {
+        return path.startsWith("/auth/users")
+                && !path.equals("/auth/users/change-password")
+                && !path.equals("/auth/users/logout");
+    }
 
     @Override
     protected void doFilterInternal(
@@ -82,12 +87,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return Optional.of(new RateLimitRule("auth", rateLimiterConfig.authConfig()));
         }
         return Optional.empty();
-    }
-
-    static boolean isRateLimited(String path) {
-        return path.startsWith("/auth/users")
-                && !path.equals("/auth/users/change-password")
-                && !path.equals("/auth/users/logout");
     }
 
     private record RateLimitRule(String group, BucketConfiguration config) {

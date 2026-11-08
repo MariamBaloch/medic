@@ -32,7 +32,6 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
         String correlationId = CorrelationId.resolve(request.getHeader(CorrelationId.HEADER));
-        response.setHeader(CorrelationId.HEADER, correlationId);
 
         try {
             MDC.put(CorrelationId.MDC_KEY, correlationId);
@@ -41,6 +40,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             }
             filterChain.doFilter(withCorrelationId(request, correlationId), response);
         } finally {
+            response.setHeader(CorrelationId.HEADER, correlationId);
             MDC.remove(CorrelationId.MDC_KEY);
         }
     }

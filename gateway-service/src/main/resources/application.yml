@@ -10,10 +10,17 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  http:
+    clients:
+      connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
+      read-timeout: ${GATEWAY_READ_TIMEOUT:0}
   cloud:
     gateway:
       server:
         webmvc:
+          streaming-media-types:
+            - text/event-stream
+            - application/stream+json
           routes:
             - id: monolith
               uri: ${MONOLITH_URL:http://localhost:8081}
