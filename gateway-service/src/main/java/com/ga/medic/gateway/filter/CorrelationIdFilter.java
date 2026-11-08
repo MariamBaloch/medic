@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponseWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.MDC;
@@ -32,15 +33,16 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
         String correlationId = CorrelationId.resolve(request.getHeader(CorrelationId.HEADER));
+        HttpServletResponse responseWithCorrelationId = withSingleCorrelationId(response, correlationId);
+        responseWithCorrelationId.setHeader(CorrelationId.HEADER, correlationId);
 
         try {
             MDC.put(CorrelationId.MDC_KEY, correlationId);
             if (log.isDebugEnabled()) {
                 log.debug("Gateway request {} {}", request.getMethod(), request.getRequestURI());
             }
-            filterChain.doFilter(withCorrelationId(request, correlationId), response);
+            filterChain.doFilter(withCorrelationId(request, correlationId), responseWithCorrelationId);
         } finally {
-            response.setHeader(CorrelationId.HEADER, correlationId);
             MDC.remove(CorrelationId.MDC_KEY);
         }
     }
@@ -71,6 +73,28 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
                     names.add(CorrelationId.HEADER);
                 }
                 return Collections.enumeration(names);
+            }
+        };
+    }
+
+    private HttpServletResponse withSingleCorrelationId(HttpServletResponse response, String correlationId) {
+        return new HttpServletResponseWrapper(response) {
+            @Override
+            public void setHeader(String name, String value) {
+                if (CorrelationId.HEADER.equalsIgnoreCase(name)) {
+                    super.setHeader(name, correlationId);
+                    return;
+                }
+                super.setHeader(name, value);
+            }
+
+            @Override
+            public void addHeader(String name, String value) {
+                if (CorrelationId.HEADER.equalsIgnoreCase(name)) {
+                    super.setHeader(name, correlationId);
+                    return;
+                }
+                super.addHeader(name, value);
             }
         };
     }

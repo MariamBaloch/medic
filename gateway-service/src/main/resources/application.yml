@@ -13,7 +13,8 @@ spring:
   http:
     clients:
       connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
-      read-timeout: ${GATEWAY_READ_TIMEOUT:0}
+
+      read-timeout: ${GATEWAY_READ_TIMEOUT:1h}
   cloud:
     gateway:
       server:
