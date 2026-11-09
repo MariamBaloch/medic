@@ -1,5 +1,7 @@
 package com.ga.medic.security;
 
+import com.ga.medic.common.security.JwtRequestFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -15,16 +17,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
+@RequiredArgsConstructor
 public class SecurityConfiguration {
+
+    private final JwtRequestFilter jwtRequestFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public JwtRequestFilter authenticationJwtTokenFilter() {
-        return new JwtRequestFilter();
     }
 
     @Bean
@@ -43,12 +43,8 @@ public class SecurityConfiguration {
                                 "/uploads/**"
                         ).permitAll()
                         .anyRequest().authenticated()
-                );
-
-        http.addFilterBefore(
-                authenticationJwtTokenFilter(),
-                UsernamePasswordAuthenticationFilter.class
-        );
+                )
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
