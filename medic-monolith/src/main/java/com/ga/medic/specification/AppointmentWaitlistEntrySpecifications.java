@@ -10,7 +10,7 @@ import java.util.Locale;
 public class AppointmentWaitlistEntrySpecifications {
 
     public static Specification<AppointmentWaitlistEntry> forPatient(Long patientId) {
-        return (root, query, cb) -> cb.equal(root.get("patient").get("id"), patientId);
+        return (root, query, cb) -> cb.equal(root.get("patientId"), patientId);
     }
 
     public static Specification<AppointmentWaitlistEntry> withOptionalDoctorName(String doctorName) {
@@ -20,10 +20,7 @@ public class AppointmentWaitlistEntrySpecifications {
             }
 
             String search = "%" + doctorName.trim().toLowerCase(Locale.ROOT) + "%";
-            var fullName = cb.concat(
-                    cb.concat(root.get("doctor").get("user").<String>get("firstName"), " "),
-                    root.get("doctor").get("user").<String>get("lastName"));
-            return cb.like(cb.lower(fullName), search);
+            return cb.like(cb.lower(root.get("doctorName")), search);
         };
     }
 

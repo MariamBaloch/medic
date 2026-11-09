@@ -1,5 +1,7 @@
 package com.ga.medic.service;
 
+import com.ga.medic.common.event.EventTypes;
+import com.ga.medic.common.security.AuthenticatedUser;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistFilterRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
@@ -8,8 +10,6 @@ import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;
 import com.ga.medic.dto.response.AvailableSlotResponse;
 import com.ga.medic.dto.response.PageResponse;
 import com.ga.medic.enums.AvailableSlotStatusEnum;
-import com.ga.medic.enums.NotificationAction;
-import com.ga.medic.enums.NotificationType;
 import com.ga.medic.enums.WaitlistStatusEnum;
 import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
@@ -17,15 +17,14 @@ import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.exception.WaitlistOfferConflictException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AppointmentWaitlistEntryMapper;
+import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
-import com.ga.medic.security.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,10 +33,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.*;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 
 import static com.ga.medic.specification.AppointmentWaitlistEntrySpecifications.*;
@@ -52,12 +52,6 @@ public class AppointmentWaitlistService {
     private static final long OFFER_WINDOW_MINUTES = 15;
     private static final int MAX_PAGE_SIZE = 100;
     private static final Sort NEWEST_FIRST_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
-    private static final DateTimeFormatter NOTIFICATION_DATE_FORMAT =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
-    private static final DateTimeFormatter NOTIFICATION_TIME_FORMAT =
-            DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
-    private static final DateTimeFormatter OFFER_EXPIRY_FORMAT =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mm:ss a", Locale.ENGLISH);
 
     private final AppointmentWaitlistEntryRepository waitlistRepository;
     private final PatientProfileRepository patientProfileRepository;
@@ -70,9 +64,8 @@ public class AppointmentWaitlistService {
     private final AppointmentWaitlistEntryMapper waitlistEntryMapper;
     private final PageMapper pageMapper;
     private final AuthenticatedUser authenticatedUser;
-    private final NotificationService notificationService;
-    @Value("${app.time-zone:Asia/Bahrain}")
-    private String appTimeZone;
+    private final OutboxService outboxService;
+    private final OutboxPayloadMapper outboxPayloadMapper;
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -84,11 +77,7 @@ public class AppointmentWaitlistService {
      */
     @Transactional
     public AppointmentWaitlistEntryResponse join(AppointmentWaitlistRequest request) {
-        PatientProfile patientProfile = authenticatedUser.get().user().getPatientProfile();
-        if (patientProfile == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
-        PatientProfile patient = lockPatient(patientProfile.getId());
+        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
 
         DoctorProfile doctor = doctorProfileRepository.findById(request.doctorId())
                 .orElseThrow(() -> new InformationNotFoundException("Doctor with id " + request.doctorId() + " not found"));
@@ -113,7 +102,7 @@ public class AppointmentWaitlistService {
                     patient.getId(), doctor.getId(), request.date(), request.startTime());
             throw new SlotNotAvailableException("You already have an overlapping appointment at this time");
         }
-        if (waitlistRepository.existsByPatient_IdAndDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatusIn(
+        if (waitlistRepository.existsByPatientIdAndDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatusIn(
                 patient.getId(), doctor.getId(), request.date(), request.startTime(), ACTIVE_ENTRY_STATUSES)) {
             log.info("Duplicate waitlist join rejected: patientId={}, doctorId={}, date={}, startTime={}",
                     patient.getId(), doctor.getId(), request.date(), request.startTime());
@@ -124,6 +113,15 @@ public class AppointmentWaitlistService {
         entry = waitlistRepository.saveAndFlush(entry);
         log.info("Patient joined appointment waitlist: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}",
                 entry.getId(), patient.getId(), doctor.getId(), request.date(), request.startTime());
+
+        outboxService.append(EventTypes.BOOKING_WAITLIST_JOINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(patient, doctor),
+                        "waitlistEntryId", entry.getId(),
+                        "date", request.date().toString(),
+                        "startTime", request.startTime().toString(),
+                        "status", WaitlistStatusEnum.WAITING.name()
+                )
+        );
 
         return waitlistEntryMapper.toResponse(entry);
     }
@@ -146,12 +144,9 @@ public class AppointmentWaitlistService {
             throw new IllegalArgumentException("Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
 
-        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
-        if (patient == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
+        Long patientId = authenticatedUser.requirePatientId();
 
-        Specification<AppointmentWaitlistEntry> specification = forPatient(patient.getId())
+        Specification<AppointmentWaitlistEntry> specification = forPatient(patientId)
                 .and(withOptionalDoctorName(doctorName))
                 .and(fromDate(filters.getDateFrom()))
                 .and(toDate(filters.getDateTo()))
@@ -170,29 +165,41 @@ public class AppointmentWaitlistService {
     @Transactional
     public void withdraw(Long entryId) {
         AppointmentWaitlistEntry entry = getEntry(entryId);
-        PatientProfile patientProfile = authenticatedUser.get().user().getPatientProfile();
-        if (patientProfile == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
-        PatientProfile patient = lockPatient(patientProfile.getId());
+        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
         assertOwner(entry, patient);
 
-        slotLockService.acquire(entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+        slotLockService.acquire(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
         entityManager.refresh(entry);
         assertOwner(entry, patient);
         if (entry.getStatus() == WaitlistStatusEnum.WAITING) {
             entry.setStatus(WaitlistStatusEnum.CANCELLED);
             waitlistRepository.save(entry);
             log.info("Patient withdrew from appointment waitlist: waitlistEntryId={}, patientId={}", entryId, patient.getId());
+            outboxService.append(EventTypes.BOOKING_WAITLIST_DECLINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
+                            outboxPayloadMapper.bookingParties(entry),
+                            "waitlistEntryId", entry.getId(),
+                            "status", WaitlistStatusEnum.CANCELLED.name(),
+                            "reason", "withdrawn"
+                    )
+            );
             return;
         }
         if (entry.getStatus() == WaitlistStatusEnum.OFFERED) {
             boolean expired = entry.getOfferExpiresAt() == null || !entry.getOfferExpiresAt().isAfter(Instant.now());
-            entry.setStatus(expired ? WaitlistStatusEnum.EXPIRED : WaitlistStatusEnum.CANCELLED);
+            WaitlistStatusEnum nextStatus = expired ? WaitlistStatusEnum.EXPIRED : WaitlistStatusEnum.CANCELLED;
+            entry.setStatus(nextStatus);
             waitlistRepository.saveAndFlush(entry);
             log.info("Patient released appointment waitlist offer: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}, expired={}",
-                    entry.getId(), patient.getId(), entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), expired);
-            offerNextWaiting(entry.getDoctor(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+                    entry.getId(), patient.getId(), entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), expired);
+            outboxService.append(expired ? EventTypes.BOOKING_WAITLIST_EXPIRED : EventTypes.BOOKING_WAITLIST_DECLINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
+                            outboxPayloadMapper.bookingParties(entry),
+                            "waitlistEntryId", entry.getId(),
+                            "date", entry.getAppointmentDate().toString(),
+                            "startTime", entry.getPreferredStartTime().toString(),
+                            "status", nextStatus.name()
+                    )
+            );
+            offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             return;
         }
         throw new WaitlistOfferConflictException("This waitlist entry is no longer active and cannot be withdrawn");
@@ -207,13 +214,9 @@ public class AppointmentWaitlistService {
     @Transactional(noRollbackFor = WaitlistOfferConflictException.class)
     public AppointmentResponse accept(Long entryId) {
         AppointmentWaitlistEntry entry = getEntry(entryId);
-        PatientProfile patientProfile = authenticatedUser.get().user().getPatientProfile();
-        if (patientProfile == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
-        PatientProfile patient = lockPatient(patientProfile.getId());
+        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
         assertOwner(entry, patient);
-        slotLockService.acquire(entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+        slotLockService.acquire(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
         entityManager.refresh(entry);
         assertOwner(entry, patient);
 
@@ -224,21 +227,21 @@ public class AppointmentWaitlistService {
         }
 
         Instant now = Instant.now();
-        AvailableSlotResponse slot = findSlot(entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), null);
+        AvailableSlotResponse slot = findSlot(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), null);
         if (entry.getOfferExpiresAt() == null || !entry.getOfferExpiresAt().isAfter(now)) {
             entry.setStatus(WaitlistStatusEnum.EXPIRED);
             waitlistRepository.saveAndFlush(entry);
             log.info("Appointment waitlist offer expired during acceptance: waitlistEntryId={}, patientId={}", entryId, patient.getId());
-            offerNextWaiting(entry.getDoctor(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+            offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             throw new WaitlistOfferConflictException("This waitlist offer has expired");
         }
 
         if (slot == null || appointmentRepository.existsActiveByDoctorAndSlot(
-                entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime())) {
+                entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime())) {
             entry.setStatus(WaitlistStatusEnum.EXPIRED);
             waitlistRepository.saveAndFlush(entry);
             log.warn("Waitlist offer could not be accepted because its slot is unavailable: waitlistEntryId={}, doctorId={}, date={}, startTime={}",
-                    entryId, entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+                    entryId, entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             throw new WaitlistOfferConflictException("The offered appointment slot is no longer available");
         }
 
@@ -247,31 +250,40 @@ public class AppointmentWaitlistService {
             waitlistRepository.saveAndFlush(entry);
             log.info("Waitlist offer released because the patient now has an overlapping appointment: waitlistEntryId={}, patientId={}",
                     entryId, patient.getId());
-            offerNextWaiting(entry.getDoctor(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+            offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             throw new WaitlistOfferConflictException("You now have an overlapping appointment and can no longer accept this offer");
         }
 
+        DoctorProfile doctor = doctorProfileRepository.findById(entry.getDoctorId())
+                .orElseThrow(() -> new InformationNotFoundException("Doctor with id " + entry.getDoctorId() + " not found"));
         AvailabilityRule rule = availabilityRuleRepository.findById(slot.ruleId())
                 .orElseThrow(() -> new InformationNotFoundException("Availability rule with id " + slot.ruleId() + " not found"));
         AppointmentBookingRequest booking = new AppointmentBookingRequest(
-                entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), null);
-        Appointment appointment = appointmentMapper.toEntity(booking, entry.getDoctor(), patient, rule, slot.endTime());
+                entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), null);
+        Appointment appointment = appointmentMapper.toEntity(booking, doctor, patient, rule, slot.endTime());
         appointment = appointmentRepository.saveAndFlush(appointment);
         entry.setStatus(WaitlistStatusEnum.BOOKED);
         waitlistRepository.saveAndFlush(entry);
 
-        notificationService.createAndSend(entry.getDoctor().getUser(), NotificationType.APPOINTMENT,
-                NotificationAction.BOOKED, "Waitlist Appointment Booked",
-                patient.getUser().getFullName() + " accepted a waitlist offer for " + entry.getAppointmentDate()
-                        + " at " + entry.getPreferredStartTime() + ".",
-                false, appointment.getId());
-        notificationService.createAndSend(patient.getUser(), NotificationType.APPOINTMENT,
-                NotificationAction.BOOKED, "Waitlist Offer Accepted",
-                "Your appointment with " + entry.getDoctor().getUser().getFullName() + " is booked for "
-                        + entry.getAppointmentDate() + " at " + entry.getPreferredStartTime() + ".",
-                false, appointment.getId());
+        outboxService.append(EventTypes.BOOKING_WAITLIST_ACCEPTED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(entry),
+                        "waitlistEntryId", entry.getId(),
+                        "appointmentId", appointment.getId(),
+                        "date", entry.getAppointmentDate().toString(),
+                        "startTime", entry.getPreferredStartTime().toString(),
+                        "status", WaitlistStatusEnum.BOOKED.name()
+                )
+        );
+        outboxService.append(EventTypes.BOOKING_APPOINTMENT_CREATED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(patient, doctor),
+                        "appointmentId", appointment.getId(),
+                        "date", entry.getAppointmentDate().toString(),
+                        "startTime", entry.getPreferredStartTime().toString(),
+                        "source", "waitlist"
+                )
+        );
         log.info("Appointment waitlist offer accepted: waitlistEntryId={}, appointmentId={}, patientId={}, doctorId={}",
-                entry.getId(), appointment.getId(), patient.getId(), entry.getDoctor().getId());
+                entry.getId(), appointment.getId(), patient.getId(), entry.getDoctorId());
         return appointmentMapper.toResponse(appointment);
     }
 
@@ -288,7 +300,7 @@ public class AppointmentWaitlistService {
     public void advanceExpiredOfferIfNeeded(Long doctorId, LocalDate date, LocalTime startTime) {
         slotLockService.acquire(doctorId, date, startTime);
         AppointmentWaitlistEntry offered = waitlistRepository
-                .findFirstByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatus(
+                .findFirstByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatus(
                         doctorId, date, startTime, WaitlistStatusEnum.OFFERED).orElse(null);
 
         if (offered == null || offered.getOfferExpiresAt() == null || offered.getOfferExpiresAt().isAfter(Instant.now())) {
@@ -299,7 +311,15 @@ public class AppointmentWaitlistService {
         waitlistRepository.saveAndFlush(offered);
         log.info("Appointment waitlist offer expired: waitlistEntryId={}, doctorId={}, date={}, startTime={}",
                 offered.getId(), doctorId, date, startTime);
-        offerNextWaiting(offered.getDoctor(), date, startTime);
+        outboxService.append(EventTypes.BOOKING_WAITLIST_EXPIRED, "waitlistEntry", String.valueOf(offered.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(offered),
+                        "waitlistEntryId", offered.getId(),
+                        "date", date.toString(),
+                        "startTime", startTime.toString(),
+                        "status", WaitlistStatusEnum.EXPIRED.name()
+                )
+        );
+        offerNextWaiting(offered.getDoctorId(), date, startTime);
     }
 
     /**
@@ -310,7 +330,7 @@ public class AppointmentWaitlistService {
     @Transactional(noRollbackFor = WaitlistOfferConflictException.class)
     public void expireOffer(Long entryId) {
         AppointmentWaitlistEntry entry = getEntry(entryId);
-        slotLockService.acquire(entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+        slotLockService.acquire(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
         entityManager.refresh(entry);
         if (entry.getStatus() != WaitlistStatusEnum.OFFERED || entry.getOfferExpiresAt() == null
                 || entry.getOfferExpiresAt().isAfter(Instant.now())) {
@@ -319,8 +339,16 @@ public class AppointmentWaitlistService {
         entry.setStatus(WaitlistStatusEnum.EXPIRED);
         waitlistRepository.saveAndFlush(entry);
         log.info("Appointment waitlist offer expired by processor: waitlistEntryId={}, doctorId={}, date={}, startTime={}",
-                entry.getId(), entry.getDoctor().getId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
-        offerNextWaiting(entry.getDoctor(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+                entry.getId(), entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
+        outboxService.append(EventTypes.BOOKING_WAITLIST_EXPIRED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(entry),
+                        "waitlistEntryId", entry.getId(),
+                        "date", entry.getAppointmentDate().toString(),
+                        "startTime", entry.getPreferredStartTime().toString(),
+                        "status", WaitlistStatusEnum.EXPIRED.name()
+                )
+        );
+        offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
     }
 
     /**
@@ -328,29 +356,29 @@ public class AppointmentWaitlistService {
      * Acquires the slot lock before checking the slot and waitlist queue.
      * Must be called within an active transaction.
      *
-     * @param doctor    the doctor who owns the slot
+     * @param doctorId  the doctor who owns the slot
      * @param date      the slot date
      * @param startTime the slot start time
      */
-    public void offerNextWaiting(DoctorProfile doctor, LocalDate date, LocalTime startTime) {
-        slotLockService.acquire(doctor.getId(), date, startTime);
-        if (waitlistRepository.findFirstByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatus(
-                doctor.getId(), date, startTime, WaitlistStatusEnum.OFFERED).isPresent()
-                || appointmentRepository.existsActiveByDoctorAndSlot(doctor.getId(), date, startTime)) {
+    public void offerNextWaiting(Long doctorId, LocalDate date, LocalTime startTime) {
+        slotLockService.acquire(doctorId, date, startTime);
+        if (waitlistRepository.findFirstByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatus(
+                doctorId, date, startTime, WaitlistStatusEnum.OFFERED).isPresent()
+                || appointmentRepository.existsActiveByDoctorAndSlot(doctorId, date, startTime)) {
             return;
         }
 
-        AvailableSlotResponse slot = findSlot(doctor.getId(), date, startTime, null);
+        AvailableSlotResponse slot = findSlot(doctorId, date, startTime, null);
         if (slot == null) {
             return;
         }
         List<AppointmentWaitlistEntry> queue = waitlistRepository
-                .findAllByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatusOrderByCreatedAtAscIdAsc(
-                        doctor.getId(), date, startTime, WaitlistStatusEnum.WAITING);
+                .findAllByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatusOrderByCreatedAtAscIdAsc(
+                        doctorId, date, startTime, WaitlistStatusEnum.WAITING);
 
         // Skip candidates with an overlapping appointment, leaving them in the queue.
         for (AppointmentWaitlistEntry candidate : queue) {
-            if (appointmentRepository.existsOverlappingForPatient(candidate.getPatient().getId(), date,
+            if (appointmentRepository.existsOverlappingForPatient(candidate.getPatientId(), date,
                     startTime, slot.endTime())) {
                 continue;
             }
@@ -360,17 +388,17 @@ public class AppointmentWaitlistService {
             candidate.setOfferExpiresAt(offeredAt.plusSeconds(OFFER_WINDOW_MINUTES * 60));
             candidate = waitlistRepository.saveAndFlush(candidate);
 
-            String doctorName = doctor.getUser().getFullName();
-            String appointmentDate = date.format(NOTIFICATION_DATE_FORMAT);
-            String appointmentTime = startTime.format(NOTIFICATION_TIME_FORMAT);
-            String offerExpiresAt = OFFER_EXPIRY_FORMAT.withZone(ZoneId.of(appTimeZone))
-                    .format(candidate.getOfferExpiresAt());
-            String message = "A waitlist appointment with " + doctorName + " is available on " + appointmentDate
-                    + " at " + appointmentTime + ". Please accept by " + offerExpiresAt + " to book this slot.";
-            notificationService.createAndSend(candidate.getPatient().getUser(), NotificationType.WAITLIST,
-                    NotificationAction.OFFERED, "Appointment Slot Available", message, false, candidate.getId());
+            outboxService.append(EventTypes.BOOKING_WAITLIST_OFFERED, "waitlistEntry", String.valueOf(candidate.getId()), OutboxService.payload(
+                            outboxPayloadMapper.bookingParties(candidate),
+                            "waitlistEntryId", candidate.getId(),
+                            "date", date.toString(),
+                            "startTime", startTime.toString(),
+                            "status", WaitlistStatusEnum.OFFERED.name(),
+                            "offerExpiresAt", candidate.getOfferExpiresAt().toString()
+                    )
+            );
             log.info("Appointment waitlist offer created: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}, expiresAt={}",
-                    candidate.getId(), candidate.getPatient().getId(), doctor.getId(), date, startTime, candidate.getOfferExpiresAt());
+                    candidate.getId(), candidate.getPatientId(), doctorId, date, startTime, candidate.getOfferExpiresAt());
             return;
         }
     }
@@ -384,7 +412,7 @@ public class AppointmentWaitlistService {
      * @return {@code true} if an offer exists; otherwise {@code false}
      */
     public boolean hasActiveOffer(Long doctorId, LocalDate date, LocalTime startTime) {
-        return waitlistRepository.findFirstByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatus(
+        return waitlistRepository.findFirstByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatus(
                 doctorId, date, startTime, WaitlistStatusEnum.OFFERED).isPresent();
     }
 
@@ -395,7 +423,8 @@ public class AppointmentWaitlistService {
      * @return the locked patient profile
      */
     private PatientProfile lockPatient(Long patientId) {
-        return patientProfileRepository.findByIdForUpdate(patientId)
+        slotLockService.acquirePatient(patientId);
+        return patientProfileRepository.findById(patientId)
                 .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
     }
 
@@ -418,7 +447,7 @@ public class AppointmentWaitlistService {
      * @throws ForbiddenActionException if the patient does not own the entry
      */
     private void assertOwner(AppointmentWaitlistEntry entry, PatientProfile patient) {
-        if (!Objects.equals(entry.getPatient().getId(), patient.getId())) {
+        if (!Objects.equals(entry.getPatientId(), patient.getId())) {
             throw new ForbiddenActionException("You can only manage your own waitlist entries");
         }
     }

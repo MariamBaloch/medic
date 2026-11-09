@@ -24,39 +24,39 @@ public interface AppointmentWaitlistEntryRepository extends JpaRepository<Appoin
     /**
      * Retrieves all waitlist entries for a patient, ordered from newest to oldest.
      */
-    List<AppointmentWaitlistEntry> findAllByPatient_IdOrderByCreatedAtDescIdDesc(Long patientId);
+    List<AppointmentWaitlistEntry> findAllByPatientIdOrderByCreatedAtDescIdDesc(Long patientId);
 
     /**
      * Retrieves waitlist entries for a specific doctor, slot, and status,
      * ordered by creation time from oldest to newest, then by ID.
      */
-    List<AppointmentWaitlistEntry> findAllByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatusOrderByCreatedAtAscIdAsc(
+    List<AppointmentWaitlistEntry> findAllByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatusOrderByCreatedAtAscIdAsc(
             Long doctorId, LocalDate appointmentDate, LocalTime preferredStartTime, WaitlistStatusEnum status);
 
     /**
      * Retrieves a doctor's waitlist entries within a date range for a specific status.
      */
-    List<AppointmentWaitlistEntry> findAllByDoctor_IdAndAppointmentDateBetweenAndStatus(
+    List<AppointmentWaitlistEntry> findAllByDoctorIdAndAppointmentDateBetweenAndStatus(
             Long doctorId, LocalDate from, LocalDate to, WaitlistStatusEnum status);
 
     /**
      * Retrieves a patient's waitlist entries for a specific doctor within a date range
      * and matching any of the supplied statuses.
      */
-    List<AppointmentWaitlistEntry> findAllByPatient_IdAndDoctor_IdAndAppointmentDateBetweenAndStatusIn(
+    List<AppointmentWaitlistEntry> findAllByPatientIdAndDoctorIdAndAppointmentDateBetweenAndStatusIn(
             Long patientId, Long doctorId, LocalDate from, LocalDate to, Collection<WaitlistStatusEnum> statuses);
 
     /**
      * Retrieves a waitlist entry matching a specific doctor, slot, and status.
      */
-    Optional<AppointmentWaitlistEntry> findFirstByDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatus(
+    Optional<AppointmentWaitlistEntry> findFirstByDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatus(
             Long doctorId, LocalDate appointmentDate, LocalTime preferredStartTime, WaitlistStatusEnum status);
 
     /**
      * Checks whether a patient already has a waitlist entry for a specific slot
      * with any of the supplied statuses.
      */
-    boolean existsByPatient_IdAndDoctor_IdAndAppointmentDateAndPreferredStartTimeAndStatusIn(
+    boolean existsByPatientIdAndDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatusIn(
             Long patientId, Long doctorId, LocalDate appointmentDate, LocalTime preferredStartTime,
             Collection<WaitlistStatusEnum> statuses);
 
