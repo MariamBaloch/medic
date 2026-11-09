@@ -27,6 +27,10 @@ spring:
               uri: ${NOTIFICATION_URL:http://localhost:8084}
               predicates:
                 - Path=/notifications/**
+            - id: audit-logs
+              uri: ${AUDIT_URL:http://localhost:8085}
+              predicates:
+                - Path=/audit-logs/**
             - id: monolith
               uri: ${MONOLITH_URL:http://localhost:8081}
               predicates:
