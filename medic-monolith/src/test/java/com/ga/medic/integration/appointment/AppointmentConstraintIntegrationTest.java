@@ -94,16 +94,22 @@ class AppointmentConstraintIntegrationTest {
     private void insertWaitlistEntry(Long patientId, Long doctorId, LocalDate date, LocalTime startTime, String status) {
         jdbcTemplate.update("""
                 INSERT INTO appointment_waitlist_entry
-                    (patient_id, doctor_id, appointment_date, preferred_start_time, status)
-                VALUES (?, ?, ?, ?, ?)
-                """, patientId, doctorId, date, startTime, status);
+                    (patient_id, doctor_id, patient_user_id, doctor_user_id,
+                     patient_name, patient_email, doctor_name, doctor_email,
+                     appointment_date, preferred_start_time, status, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                patientId, doctorId,
+                9000L + patientId, 8000L + doctorId,
+                "Patient " + patientId, "patient" + patientId + "@test.local",
+                "Doctor " + doctorId, "doctor" + doctorId + "@test.local",
+                date, startTime, status);
     }
 
     private Appointment createAppointment(DoctorProfile doctor, PatientProfile patient,
                                           LocalDate date, LocalTime startTime) {
         Appointment appointment = new Appointment();
-        appointment.setDoctor(doctor);
-        appointment.setPatient(patient);
+        appointment.applyPartySnapshots(patient, doctor);
         appointment.setAppointmentDate(date);
         appointment.setStartTime(startTime);
         appointment.setEndTime(startTime.plusMinutes(30));

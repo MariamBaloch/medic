@@ -21,8 +21,7 @@ import com.ga.medic.repository.PatientProfileRepository;
 import com.ga.medic.repository.RoleRepository;
 import com.ga.medic.repository.SpecializationRepository;
 import com.ga.medic.repository.UserRepository;
-import com.ga.medic.security.AuthenticatedUser;
-import com.ga.medic.security.MyUserDetails;
+import com.ga.medic.common.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -179,7 +178,7 @@ class AppointmentRescheduleH2Test {
         doctor = doctorProfileRepository.saveAndFlush(doctor);
 
         AvailabilityRule rule = new AvailabilityRule();
-        rule.setDoctor(doctor);
+        rule.setDoctorId(doctor.getId());
         rule.setStartDate(LocalDate.now().minusDays(1));
         rule.setEndDate(LocalDate.now().plusDays(90));
         rule.setDaysOfWeek(EnumSet.allOf(DayOfWeek.class));
@@ -224,9 +223,8 @@ class AppointmentRescheduleH2Test {
     private Appointment createAppointment(PatientProfile patient, DoctorProfile doctor, AvailabilityRule rule,
                                          LocalDate date, LocalTime startTime, AppointmentStatusEnum status) {
         Appointment appointment = new Appointment();
-        appointment.setPatient(patient);
-        appointment.setDoctor(doctor);
-        appointment.setAvailabilityRule(rule);
+        appointment.applyPartySnapshots(patient, doctor);
+        appointment.setAvailabilityRuleId(rule.getId());
         appointment.setAppointmentDate(date);
         appointment.setStartTime(startTime);
         appointment.setEndTime(startTime.plusMinutes(rule.getSlotMinutes()));
@@ -259,7 +257,7 @@ class AppointmentRescheduleH2Test {
         new TransactionTemplate(transactionManager).execute(transactionStatus -> {
             DoctorProfile doctor = doctorProfileRepository.findById(testData.doctorId()).orElseThrow();
             AvailabilityException exception = new AvailabilityException();
-            exception.setDoctor(doctor);
+            exception.setDoctorId(doctor.getId());
             exception.setExceptionDate(date);
             exception.setStartTime(startTime);
             exception.setEndTime(endTime);
@@ -271,7 +269,10 @@ class AppointmentRescheduleH2Test {
 
     private void authenticateAs(String email) {
         User user = userRepository.findByEmail(email).orElseThrow();
-        when(authenticatedUser.get()).thenReturn(new MyUserDetails(user));
+        when(authenticatedUser.getUserId()).thenReturn(user.getId());
+        when(authenticatedUser.requirePatientId()).thenReturn(user.getPatientProfile().getId());
+        when(authenticatedUser.getPatientId()).thenReturn(user.getPatientProfile().getId());
+        when(authenticatedUser.getName()).thenReturn(user.getFullName());
     }
 
     private record AppointmentTestData(

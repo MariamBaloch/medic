@@ -8,10 +8,10 @@ import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.PatientProfileRepository;
 import com.ga.medic.repository.UserRepository;
 import com.ga.medic.security.JWTUtils;
-import com.ga.medic.security.MyUserDetails;
 import com.ga.medic.service.AppointmentSlotLockService;
 import com.ga.medic.service.EmailService;
-import com.ga.medic.service.TokenBlacklistService;
+import com.ga.medic.common.security.TokenBlacklistService;
+import com.ga.medic.common.security.TokenVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +78,8 @@ class AppointmentConcurrencyIntegrationTest {
     @MockitoBean
     private TokenBlacklistService tokenBlacklistService;
     @MockitoBean
+    private TokenVersionService tokenVersionService;
+    @MockitoBean
     private EmailService emailService;
     private String patientOneToken;
     private String patientTwoToken;
@@ -88,14 +90,16 @@ class AppointmentConcurrencyIntegrationTest {
     @BeforeEach
     void setUp() {
         when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
+        when(tokenVersionService.matches(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(true);
 
         User patientOne = findSeedUser("patient1@medic.com");
         User patientTwo = findSeedUser("patient2@medic.com");
         User doctorOne = findSeedUser("doctor1@medic.com");
         User doctorTwo = findSeedUser("doctor2@medic.com");
 
-        patientOneToken = jwtUtils.generateJwtToken(new MyUserDetails(patientOne));
-        patientTwoToken = jwtUtils.generateJwtToken(new MyUserDetails(patientTwo));
+        patientOneToken = jwtUtils.generateJwtToken(patientOne);
+        patientTwoToken = jwtUtils.generateJwtToken(patientTwo);
         patientOneId = patientProfileRepository.findByUserId(patientOne.getId()).orElseThrow().getId();
         doctorOneId = doctorProfileRepository.findByUserId(doctorOne.getId()).orElseThrow().getId();
         doctorTwoId = doctorProfileRepository.findByUserId(doctorTwo.getId()).orElseThrow().getId();
