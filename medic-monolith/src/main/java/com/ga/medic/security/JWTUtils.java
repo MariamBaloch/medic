@@ -1,18 +1,23 @@
 package com.ga.medic.security;
 
-import io.jsonwebtoken.Claims;
+import com.ga.medic.common.security.JwtClaims;
+import com.ga.medic.common.security.JwtSupport;
+import com.ga.medic.model.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @Service
+@RequiredArgsConstructor
 public class JWTUtils {
+
+    private final JwtSupport jwtSupport;
 
     @Value("${jwt.secret-key}")
     private String jwtSecret;
@@ -20,43 +25,45 @@ public class JWTUtils {
     @Value("${jwt.expiration-time}")
     private long jwtExpirationTime;
 
-    private Claims extractClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(jwtSecret)
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-    }
-
-    public String generateJwtToken(MyUserDetails myUserDetails) {
-        return Jwts.builder()
-                .setSubject(myUserDetails.getUsername())
+    public String generateJwtToken(User user) {
+        var builder = Jwts.builder()
+                .setSubject(user.getEmail())
                 .setId(UUID.randomUUID().toString())
+                .claim(JwtClaims.USER_ID, user.getId())
+                .claim(JwtClaims.EMAIL, user.getEmail())
+                .claim(JwtClaims.NAME, user.getFullName())
+                .claim(JwtClaims.ROLES, List.of(user.getRole().getName()))
+                .claim(JwtClaims.TOKEN_VERSION, user.getTokenVersion())
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(new Date().getTime() + jwtExpirationTime))
-                .signWith(SignatureAlgorithm.HS256, jwtSecret)
-                .compact();
+                .setExpiration(new Date(new Date().getTime() + jwtExpirationTime));
+
+        if (user.getPatientProfile() != null) {
+            builder.claim(JwtClaims.PATIENT_ID, user.getPatientProfile().getId());
+        }
+        if (user.getDoctorProfile() != null) {
+            builder.claim(JwtClaims.DOCTOR_ID, user.getDoctorProfile().getId());
+        }
+
+        return builder.signWith(SignatureAlgorithm.HS256, jwtSecret).compact();
     }
 
-    public String getUserNameFromJwtToken(String token) {
-        return extractClaims(token).getSubject();
+    /**
+     * @deprecated prefer {@link #generateJwtToken(User)}
+     */
+    @Deprecated
+    public String generateJwtToken(MyUserDetails myUserDetails) {
+        return generateJwtToken(myUserDetails.user());
     }
 
     public String getJtiFromJwtToken(String token) {
-        return extractClaims(token).getId();
+        return jwtSupport.getJti(token);
     }
 
     public Date getExpirationFromJwtToken(String token) {
-        return extractClaims(token).getExpiration();
+        return jwtSupport.getExpiration(token);
     }
 
     public boolean validateJwtToken(String authToken) {
-        try {
-            extractClaims(authToken);
-            return true;
-        } catch (SecurityException e) {
-            log.warn("Invalid JWT: {}", e.getMessage());
-        }
-        return false;
+        return jwtSupport.validate(authToken);
     }
 }
