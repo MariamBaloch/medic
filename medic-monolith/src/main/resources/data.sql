@@ -288,16 +288,3 @@ SELECT doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, pat
        consultation_fee, 'COMPLETED', 'Historical checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM ranked_candidates
 WHERE candidate_rank <= 3 - completed_count;
-
--- Seed Audit Logs
-INSERT INTO audit_log (username, action, entity_type, description, timestamp)
-SELECT 'admin@medic.com', 'LOGIN', 'USER', 'Admin logged in', CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE description = 'Admin logged in');
-
-INSERT INTO audit_log (username, action, entity_type, description, timestamp)
-SELECT 'doctor1@medic.com', 'CREATE', 'AVAILABILITY_RULE', 'Doctor created availability rule', CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE description = 'Doctor created availability rule');
-
-INSERT INTO audit_log (username, action, entity_type, description, timestamp)
-SELECT 'patient1@medic.com', 'BOOK', 'APPOINTMENT', 'Patient booked appointment', CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE description = 'Patient booked appointment');
