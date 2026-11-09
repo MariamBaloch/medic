@@ -23,6 +23,10 @@ spring:
             - text/event-stream
             - application/stream+json
           routes:
+            - id: notifications
+              uri: ${NOTIFICATION_URL:http://localhost:8084}
+              predicates:
+                - Path=/notifications/**
             - id: monolith
               uri: ${MONOLITH_URL:http://localhost:8081}
               predicates:
