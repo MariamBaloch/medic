@@ -14,7 +14,9 @@ import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.RoleRepository;
 import com.ga.medic.repository.SpecializationRepository;
 import com.ga.medic.repository.UserRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.common.security.TokenBlacklistService;
+import com.ga.medic.common.security.TokenVersionService;
 import com.ga.medic.security.JWTUtils;
 import com.ga.medic.security.MyUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +56,7 @@ public class AuthService {
     private final DoctorProfileRepository doctorProfileRepository;
     private final AuthenticatedUser authenticatedUser;
     private final TokenBlacklistService tokenBlacklistService;
+    private final TokenVersionService tokenVersionService;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String appBaseUrl;
@@ -235,7 +238,9 @@ public class AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         MyUserDetails myUserDetails = (MyUserDetails) authentication.getPrincipal();
-        String jwtToken = jwtUtils.generateJwtToken(myUserDetails);
+        User authenticated = myUserDetails.user();
+        tokenVersionService.store(authenticated.getId(), authenticated.getTokenVersion());
+        String jwtToken = jwtUtils.generateJwtToken(authenticated);
 
         return new LoginResponse(jwtToken);
     }
@@ -277,6 +282,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiry(null);
+        bumpTokenVersion(user);
         userRepository.save(user);
 
         return true;
@@ -289,12 +295,19 @@ public class AuthService {
      */
     @Transactional
     public void changePassword(ChangePasswordRequest request) {
-        User user = authenticatedUser.get().user();
+        User user = userRepository.findById(authenticatedUser.getUserId())
+                .orElseThrow(() -> new InformationNotFoundException("Authenticated user not found"));
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Current password does not match");
         }
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+        bumpTokenVersion(user);
         userRepository.save(user);
+    }
+
+    private void bumpTokenVersion(User user) {
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        tokenVersionService.store(user.getId(), user.getTokenVersion());
     }
 
     /**

@@ -12,7 +12,9 @@ import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.RoleRepository;
 import com.ga.medic.repository.SpecializationRepository;
 import com.ga.medic.repository.UserRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.common.security.TokenBlacklistService;
+import com.ga.medic.common.security.TokenVersionService;
 import com.ga.medic.security.JWTUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,6 +55,8 @@ public class AuthServiceTest {
     private AuthenticatedUser authenticatedUser;
     @Mock
     private TokenBlacklistService tokenBlacklistService;
+    @Mock
+    private TokenVersionService tokenVersionService;
 
     @InjectMocks
     private AuthService authService;
