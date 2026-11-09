@@ -10,8 +10,7 @@ import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.enums.WaitlistStatusEnum;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
-import com.ga.medic.security.AuthenticatedUser;
-import com.ga.medic.security.MyUserDetails;
+import com.ga.medic.common.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -153,7 +152,7 @@ class AppointmentWaitlistH2Test {
         doctor = doctorProfileRepository.saveAndFlush(doctor);
 
         AvailabilityRule rule = new AvailabilityRule();
-        rule.setDoctor(doctor);
+        rule.setDoctorId(doctor.getId());
         rule.setStartDate(LocalDate.now().minusDays(1));
         rule.setEndDate(LocalDate.now().plusDays(90));
         rule.setDaysOfWeek(EnumSet.allOf(DayOfWeek.class));
@@ -165,9 +164,8 @@ class AppointmentWaitlistH2Test {
         LocalDate date = LocalDate.now().plusDays(7);
         LocalTime startTime = LocalTime.of(10, 0);
         Appointment occupiedAppointment = new Appointment();
-        occupiedAppointment.setPatient(occupantPatient);
-        occupiedAppointment.setDoctor(doctor);
-        occupiedAppointment.setAvailabilityRule(rule);
+        occupiedAppointment.applyPartySnapshots(occupantPatient, doctor);
+        occupiedAppointment.setAvailabilityRuleId(rule.getId());
         occupiedAppointment.setAppointmentDate(date);
         occupiedAppointment.setStartTime(startTime);
         occupiedAppointment.setEndTime(startTime.plusMinutes(30));
@@ -211,8 +209,10 @@ class AppointmentWaitlistH2Test {
 
     private void authenticateAs(String email) {
         User user = userRepository.findByEmail(email).orElseThrow();
-        when(authenticatedUser.get()).thenReturn(new MyUserDetails(user));
         when(authenticatedUser.getUserId()).thenReturn(user.getId());
+        when(authenticatedUser.requirePatientId()).thenReturn(user.getPatientProfile().getId());
+        when(authenticatedUser.getPatientId()).thenReturn(user.getPatientProfile().getId());
+        when(authenticatedUser.getName()).thenReturn(user.getFullName());
     }
 
     private record TestData(

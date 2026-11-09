@@ -6,21 +6,21 @@ import com.ga.medic.dto.request.AppointmentStatusCountFilterRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
 import com.ga.medic.dto.response.*;
+import com.ga.medic.common.event.EventTypes;
 import com.ga.medic.enums.AppointmentStatusEnum;
-import com.ga.medic.enums.NotificationAction;
-import com.ga.medic.enums.NotificationType;
 import com.ga.medic.exception.ForbiddenActionException;
 import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.exception.WaitlistOfferConflictException;
 import com.ga.medic.mapper.AppointmentMapper;
+import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.repository.DoctorProfileRepository;
 import com.ga.medic.repository.PatientProfileRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.common.security.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +53,8 @@ public class AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final AuthenticatedUser authenticatedUser;
     private final PageMapper pageMapper;
-    private final NotificationService notificationService;
+    private final OutboxService outboxService;
+    private final OutboxPayloadMapper outboxPayloadMapper;
     private final AppointmentSlotLockService slotLockService;
     private final AppointmentWaitlistService waitlistService;
     @PersistenceContext
@@ -70,10 +71,10 @@ public class AppointmentService {
     @Transactional
     public PageResponse<AppointmentResponse> getPatientAppointments(String doctorName, AppointmentFilterRequest filters,
                                                                      Pageable pageable) {
-        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
+        Long patientId = authenticatedUser.requirePatientId();
 
         Specification<Appointment> spec = patientAppointmentFilters(
-                patient.getId(), doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
+                patientId, doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
                 .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
@@ -90,9 +91,9 @@ public class AppointmentService {
     @Transactional
     public AppointmentStatusCountsResponse getPatientAppointmentStatusCounts(
             String doctorName, AppointmentStatusCountFilterRequest filters) {
-        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
+        Long patientId = authenticatedUser.requirePatientId();
         Specification<Appointment> specification = patientAppointmentFilters(
-                patient.getId(), doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
+                patientId, doctorName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
         return toStatusCounts(appointmentRepository.countByStatus(specification));
     }
 
@@ -104,17 +105,21 @@ public class AppointmentService {
      */
     @Transactional
     public AppointmentDetailResponse getAppointmentDetails(Long appointmentId) {
-        User currentUser = authenticatedUser.get().user();
+        Long currentUserId = authenticatedUser.getUserId();
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
-        boolean isDoctor = appointment.getDoctor().getUser().getId().equals(currentUser.getId());
+        boolean isPatient = Objects.equals(appointment.getPatientUserId(), currentUserId);
+        boolean isDoctor = Objects.equals(appointment.getDoctorUserId(), currentUserId);
         if (!isPatient && !isDoctor) {
             throw new ForbiddenActionException("You can only view appointments you are associated with");
         }
 
-        return appointmentMapper.toDetailResponse(appointment);
+        DoctorProfile doctor = doctorProfileRepository.findById(appointment.getDoctorId())
+                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
+        PatientProfile patient = patientProfileRepository.findById(appointment.getPatientId())
+                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        return appointmentMapper.toDetailResponse(appointment, doctor, patient);
     }
 
     /**
@@ -128,9 +133,9 @@ public class AppointmentService {
     @Transactional
     public PageResponse<AppointmentResponse> getDoctorAppointments(String patientName, AppointmentFilterRequest filters,
                                                                    Pageable pageable) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
         Specification<Appointment> spec = doctorAppointmentFilters(
-                doctor.getId(), patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
+                doctorId, patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId())
                 .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
@@ -147,9 +152,9 @@ public class AppointmentService {
     @Transactional
     public AppointmentStatusCountsResponse getDoctorAppointmentStatusCounts(
             String patientName, AppointmentStatusCountFilterRequest filters) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
         Specification<Appointment> specification = doctorAppointmentFilters(
-                doctor.getId(), patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
+                doctorId, patientName, filters.getDateFrom(), filters.getDateTo(), filters.getSpecializationId());
         return toStatusCounts(appointmentRepository.countByStatus(specification));
     }
 
@@ -282,7 +287,7 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        if (!appointment.getPatient().getId().equals(patient.getId())) {
+        if (!Objects.equals(appointment.getPatientId(), patient.getId())) {
             throw new ForbiddenActionException("You can only reschedule your own appointments");
         }
         if (appointment.getStatus() != AppointmentStatusEnum.BOOKED) {
@@ -306,17 +311,19 @@ public class AppointmentService {
             return appointmentMapper.toResponse(appointment);
         }
 
-        DoctorProfile doctor = appointment.getDoctor();
+        Long doctorId = appointment.getDoctorId();
+        DoctorProfile doctor = doctorProfileRepository.findById(doctorId)
+                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
         LocalDate initiallyObservedDate = appointment.getAppointmentDate();
         LocalTime initiallyObservedStart = appointment.getStartTime();
         slotLockService.acquireAll(List.of(
-                new AppointmentSlotLockService.SlotKey(doctor.getId(), initiallyObservedDate, initiallyObservedStart),
-                new AppointmentSlotLockService.SlotKey(doctor.getId(), request.date(), request.startTime())));
+                new AppointmentSlotLockService.SlotKey(doctorId, initiallyObservedDate, initiallyObservedStart),
+                new AppointmentSlotLockService.SlotKey(doctorId, request.date(), request.startTime())));
         entityManager.refresh(appointment);
         if (!appointment.getAppointmentDate().equals(initiallyObservedDate)
                 || !appointment.getStartTime().equals(initiallyObservedStart)
                 || appointment.getStatus() != AppointmentStatusEnum.BOOKED
-                || !appointment.getPatient().getId().equals(patient.getId())
+                || !Objects.equals(appointment.getPatientId(), patient.getId())
                 || !Objects.equals(appointment.getVersion(), request.expectedVersion())) {
             throw new ObjectOptimisticLockingFailureException(Appointment.class, appointmentId);
         }
@@ -326,20 +333,20 @@ public class AppointmentService {
                 && !appointment.getStartTime().isAfter(LocalTime.now()))) {
             throw new IllegalArgumentException("Only future appointments can be rescheduled");
         }
-        waitlistService.advanceExpiredOfferIfNeeded(doctor.getId(), request.date(), request.startTime());
+        waitlistService.advanceExpiredOfferIfNeeded(doctorId, request.date(), request.startTime());
 
         log.info("Rescheduling appointment: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
-                appointmentId, patient.getId(), doctor.getId(), appointment.getAppointmentDate(),
+                appointmentId, patient.getId(), doctorId, appointment.getAppointmentDate(),
                 appointment.getStartTime(), request.date(), request.startTime());
 
-        if (waitlistService.hasActiveOffer(doctor.getId(), request.date(), request.startTime())) {
+        if (waitlistService.hasActiveOffer(doctorId, request.date(), request.startTime())) {
             log.warn("Appointment reschedule blocked by waitlist offer: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                    appointmentId, patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    appointmentId, patient.getId(), doctorId, request.date(), request.startTime());
             throw new WaitlistOfferConflictException("The requested time is reserved by an active waitlist offer");
         }
 
         AvailableSlotResponse targetSlot = availabilityRuleService
-                .getAvailability(doctor.getId(), request.date(), request.date(), appointmentId)
+                .getAvailability(doctorId, request.date(), request.date(), appointmentId)
                 .stream()
                 .filter(slot -> slot.date().equals(request.date()) && slot.startTime().equals(request.startTime()))
                 .findFirst()
@@ -347,7 +354,7 @@ public class AppointmentService {
                         "The requested slot on " + request.date() + " at " + request.startTime()
                                 + " is not available. It may have been booked, is in the past, or does not match the doctor's schedule."));
 
-        if (appointmentRepository.existsActiveByDoctorAndSlot(doctor.getId(), request.date(), request.startTime())) {
+        if (appointmentRepository.existsActiveByDoctorAndSlot(doctorId, request.date(), request.startTime())) {
             throw new SlotNotAvailableException("This slot has just been booked by another patient");
         }
 
@@ -364,12 +371,12 @@ public class AppointmentService {
         appointment.setAppointmentDate(targetSlot.date());
         appointment.setStartTime(targetSlot.startTime());
         appointment.setEndTime(targetSlot.endTime());
-        appointment.setAvailabilityRule(rule);
+        appointment.setAvailabilityRuleId(rule.getId());
         appointment = appointmentRepository.saveAndFlush(appointment);
-        waitlistService.offerNextWaiting(doctor, oldDate, oldStartTime);
+        waitlistService.offerNextWaiting(doctorId, oldDate, oldStartTime);
 
         log.info("Appointment rescheduled: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
-                appointment.getId(), patient.getId(), doctor.getId(), oldDate, oldStartTime,
+                appointment.getId(), patient.getId(), doctorId, oldDate, oldStartTime,
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
         outboxService.append(EventTypes.BOOKING_APPOINTMENT_RESCHEDULED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
@@ -402,22 +409,22 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        if (!appointment.getPatient().getUser().getId().equals(currentUserId)) {
+        if (!Objects.equals(appointment.getPatientId(), patientId)) {
             throw new ForbiddenActionException("You can only cancel your own appointments");
         }
 
         LocalDate observedDate = appointment.getAppointmentDate();
         LocalTime observedStart = appointment.getStartTime();
-        DoctorProfile observedDoctor = appointment.getDoctor();
-        slotLockService.acquire(observedDoctor.getId(), observedDate, observedStart);
+        Long observedDoctorId = appointment.getDoctorId();
+        slotLockService.acquire(observedDoctorId, observedDate, observedStart);
         entityManager.refresh(appointment);
         if (!appointment.getAppointmentDate().equals(observedDate)
                 || !appointment.getStartTime().equals(observedStart)
-                || !appointment.getDoctor().getId().equals(observedDoctor.getId())) {
+                || !Objects.equals(appointment.getDoctorId(), observedDoctorId)) {
             throw new WaitlistOfferConflictException("This appointment changed while cancellation was being processed. Refresh and try again.");
         }
 
-        if (!appointment.getPatient().getUser().getId().equals(currentUserId)) {
+        if (!Objects.equals(appointment.getPatientId(), patientId)) {
             throw new ForbiddenActionException("You can only cancel your own appointments");
         }
 
@@ -433,9 +440,9 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatusEnum.CANCELLED);
         appointment.setCancelledReason(request.reason());
         appointment = appointmentRepository.saveAndFlush(appointment);
-        waitlistService.offerNextWaiting(appointment.getDoctor(), appointment.getAppointmentDate(), appointment.getStartTime());
+        waitlistService.offerNextWaiting(appointment.getDoctorId(), appointment.getAppointmentDate(), appointment.getStartTime());
         log.info("Appointment cancelled: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                appointment.getId(), patient.getId(), appointment.getDoctor().getId(),
+                appointment.getId(), patient.getId(), appointment.getDoctorId(),
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
         outboxService.append(EventTypes.BOOKING_APPOINTMENT_CANCELLED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
@@ -466,8 +473,8 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        Long doctorId = authenticatedUser.get().user().getDoctorProfile().getId();
-        if (!appointment.getDoctor().getId().equals(doctorId)) {
+        Long doctorId = authenticatedUser.requireDoctorId();
+        if (!Objects.equals(appointment.getDoctorId(), doctorId)) {
             throw new ForbiddenActionException("You can only update your own appointments");
         }
 

@@ -1,5 +1,7 @@
 package com.ga.medic.service;
 
+import com.ga.medic.common.event.EventTypes;
+import com.ga.medic.common.security.AuthenticatedUser;
 import com.ga.medic.dto.request.AvailabilityExceptionRequest;
 import com.ga.medic.dto.response.AvailabilityExceptionDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityExceptionResponse;
@@ -12,7 +14,7 @@ import com.ga.medic.model.AvailabilityException;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityExceptionRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.repository.DoctorProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class AvailabilityExceptionService {
     private final AvailabilityExceptionRepository exceptionRepository;
     private final AvailabilityExceptionMapper exceptionMapper;
     private final AppointmentRepository appointmentRepository;
+    private final DoctorProfileRepository doctorProfileRepository;
     private final AuthenticatedUser authenticatedUser;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -38,8 +41,8 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public List<AvailabilityExceptionResponse> listExceptions() {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
-        List<AvailabilityException> exceptions = exceptionRepository.findCurrentAndFutureByDoctorId(doctor.getId(), LocalDate.now());
+        Long doctorId = authenticatedUser.requireDoctorId();
+        List<AvailabilityException> exceptions = exceptionRepository.findCurrentAndFutureByDoctorId(doctorId, LocalDate.now());
         return exceptionMapper.toResponseList(exceptions);
     }
 
@@ -51,12 +54,12 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public AvailabilityExceptionResponse createException(AvailabilityExceptionRequest request) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        DoctorProfile doctor = requireDoctorProfile();
 
         checkExceptionOverlap(doctor.getId(), request, -1L);
 
         AvailabilityException exception = exceptionMapper.toEntity(request);
-        exception.setDoctor(doctor);
+        exception.setDoctorId(doctor.getId());
         return getAvailabilityExceptionResponse(request, doctor, exception);
     }
 
@@ -69,7 +72,7 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public AvailabilityExceptionResponse updateException(Long exceptionId, AvailabilityExceptionRequest request) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        DoctorProfile doctor = requireDoctorProfile();
 
         AvailabilityException existing = exceptionRepository.findByIdAndDoctorId(exceptionId, doctor.getId()).orElseThrow(() -> new InformationNotFoundException("Availability exception not found"));
 
@@ -111,16 +114,16 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public AvailabilityExceptionDeleteResponse deleteException(Long exceptionId) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
 
-        AvailabilityException exception = exceptionRepository.findByIdAndDoctorId(exceptionId, doctor.getId())
+        AvailabilityException exception = exceptionRepository.findByIdAndDoctorId(exceptionId, doctorId)
                 .orElseThrow(() -> new InformationNotFoundException("Availability exception not found"));
 
         List<Appointment> affectedAppointments;
         if (exception.getStartTime() == null) {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(doctor.getId(), exception.getExceptionDate());
+            affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(doctorId, exception.getExceptionDate());
         } else {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDateAndTimeRange(doctor.getId(), exception.getExceptionDate(), exception.getStartTime(), exception.getEndTime());
+            affectedAppointments = appointmentRepository.findActiveByDoctorAndDateAndTimeRange(doctorId, exception.getExceptionDate(), exception.getStartTime(), exception.getEndTime());
         }
 
         exceptionRepository.delete(exception);
@@ -129,6 +132,11 @@ public class AvailabilityExceptionService {
         String message = affectedAppointments.isEmpty() ? null : affectedAppointments.size() + " existing appointment(s) are affected by the deleted exception but were kept";
 
         return exceptionMapper.toDeleteResponse(affectedAppointments, message);
+    }
+
+    private DoctorProfile requireDoctorProfile() {
+        return doctorProfileRepository.findById(authenticatedUser.requireDoctorId())
+                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
     }
 
     /**

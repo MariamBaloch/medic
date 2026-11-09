@@ -2,6 +2,7 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.*;
+import com.ga.medic.common.event.EventTypes;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.AvailableSlotStatusEnum;
 import com.ga.medic.enums.WaitlistStatusEnum;
@@ -15,7 +16,7 @@ import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AppointmentWaitlistEntryRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.repository.DoctorProfileRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.common.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -52,8 +53,8 @@ public class AvailabilityRuleService {
      */
     @Transactional(readOnly = true)
     public List<AvailabilityRuleResponse> listRules() {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
-        List<AvailabilityRule> rules = ruleRepository.findCurrentAndFuture(doctor.getId(), LocalDate.now());
+        Long doctorId = authenticatedUser.requireDoctorId();
+        List<AvailabilityRule> rules = ruleRepository.findCurrentAndFuture(doctorId, LocalDate.now());
         return ruleMapper.toResponseList(rules);
     }
 
@@ -65,11 +66,11 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public AvailabilityRuleUpdateResponse createRule(AvailabilityRuleRequest request) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        DoctorProfile doctor = requireDoctorProfile();
         checkRuleOverlap(doctor.getId(), request, -1L);
 
         AvailabilityRule rule = ruleMapper.toEntity(request);
-        rule.setDoctor(doctor);
+        rule.setDoctorId(doctor.getId());
         rule = ruleRepository.save(rule);
         eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(rule), null, null);
@@ -83,9 +84,9 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public AvailabilityRuleDeleteResponse deleteRule(Long ruleId) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
 
-        AvailabilityRule rule = ruleRepository.findByIdAndDoctorId(ruleId, doctor.getId())
+        AvailabilityRule rule = ruleRepository.findByIdAndDoctorId(ruleId, doctorId)
                 .orElseThrow(() -> new InformationNotFoundException("Availability rule not found"));
 
         LocalDate today = LocalDate.now();
@@ -97,7 +98,7 @@ public class AvailabilityRuleService {
             affectedAppointments = appointmentRepository.findByAvailabilityRuleId(ruleId);
 
             for (Appointment appointment : affectedAppointments) {
-                appointment.setAvailabilityRule(null);
+                appointment.setAvailabilityRuleId(null);
             }
 
             appointmentRepository.saveAll(affectedAppointments);
@@ -128,7 +129,7 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public AvailabilityRuleUpdateResponse updateRule(Long ruleId, AvailabilityRuleRequest request) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        DoctorProfile doctor = requireDoctorProfile();
         AvailabilityRule existing = ruleRepository.findByIdAndDoctorId(ruleId, doctor.getId())
                 .orElseThrow(() -> new InformationNotFoundException("Availability rule not found"));
 
@@ -155,7 +156,7 @@ public class AvailabilityRuleService {
             checkRuleOverlap(doctor.getId(), request, existing.getId());
 
             AvailabilityRule newRule = ruleMapper.toEntity(request);
-            newRule.setDoctor(doctor);
+            newRule.setDoctorId(doctor.getId());
 
             newRule = ruleRepository.save(newRule);
             existing = newRule;
@@ -179,11 +180,11 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public DoctorCalendarResponse getCalendar(LocalDate from, LocalDate to) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
 
-        List<AvailableSlotResponse> slots = computeAvailableSlots(doctor.getId(), from, to, null, null).slots();
+        List<AvailableSlotResponse> slots = computeAvailableSlots(doctorId, from, to, null, null).slots();
 
-        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctor.getId(), from, to);
+        List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
 
         return new DoctorCalendarResponse(slots, appointmentMapper.toResponseList(appointments));
     }
@@ -222,14 +223,11 @@ public class AvailabilityRuleService {
         if (!doctorProfileRepository.existsById(doctorId)) {
             throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
         }
-        PatientProfile patient = authenticatedUser.get().user().getPatientProfile();
-        if (patient == null) {
-            throw new InformationNotFoundException("Patient profile not found.");
-        }
-        ComputedAvailability availability = computeAvailableSlots(doctorId, from, to, null, patient.getId());
+        Long patientId = authenticatedUser.requirePatientId();
+        ComputedAvailability availability = computeAvailableSlots(doctorId, from, to, null, patientId);
         List<PatientAppointmentCalendarResponse> patientAppointments = availability.patientAppointments().stream()
                 .map(appointment -> new PatientAppointmentCalendarResponse(
-                        appointment.getId(), appointment.getDoctor().getUser().getFullName(),
+                        appointment.getId(), appointment.getDoctorName(),
                         appointment.getAppointmentDate(), appointment.getStartTime(), appointment.getEndTime(),
                         appointment.getReason()))
                 .toList();
@@ -242,15 +240,15 @@ public class AvailabilityRuleService {
      */
     @Transactional(readOnly = true)
     public DoctorDailyAvailabilityResponse getDailyAvailabilityForAuthenticatedDoctor(LocalDate date) {
-        DoctorProfile doctor = authenticatedUser.get().user().getDoctorProfile();
-        if (doctor == null) {
-            throw new InformationNotFoundException("Doctor profile not found.");
-        }
-
-        Long doctorId = doctor.getId();
+        Long doctorId = authenticatedUser.requireDoctorId();
         List<AvailableSlotResponse> slots = computeAvailableSlots(doctorId, date, date, null, null).slots().stream()
                 .filter(slot -> slot.status() == AvailableSlotStatusEnum.AVAILABLE).toList();
         return new DoctorDailyAvailabilityResponse(doctorId, date, mergeAdjacentSlots(slots));
+    }
+
+    private DoctorProfile requireDoctorProfile() {
+        return doctorProfileRepository.findById(authenticatedUser.requireDoctorId())
+                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
     }
 
     private List<AvailableTimeRangeResponse> mergeAdjacentSlots(List<AvailableSlotResponse> slots) {
@@ -388,14 +386,14 @@ public class AvailabilityRuleService {
                 .map(appointment -> new SlotKey(appointment.getAppointmentDate(), appointment.getStartTime()))
                 .collect(Collectors.toSet());
         Set<SlotKey> offeredKeys = waitlistEntryRepository
-                .findAllByDoctor_IdAndAppointmentDateBetweenAndStatus(doctorId, from, to, WaitlistStatusEnum.OFFERED)
+                .findAllByDoctorIdAndAppointmentDateBetweenAndStatus(doctorId, from, to, WaitlistStatusEnum.OFFERED)
                 .stream()
                 .map(entry -> new SlotKey(entry.getAppointmentDate(), entry.getPreferredStartTime()))
                 .collect(Collectors.toSet());
 
         Set<SlotKey> patientWaitlistKeys = patientId == null
                 ? Set.of()
-                : waitlistEntryRepository.findAllByPatient_IdAndDoctor_IdAndAppointmentDateBetweenAndStatusIn(
+                : waitlistEntryRepository.findAllByPatientIdAndDoctorIdAndAppointmentDateBetweenAndStatusIn(
                         patientId, doctorId, from, to, List.of(WaitlistStatusEnum.WAITING, WaitlistStatusEnum.OFFERED))
                 .stream()
                 .map(entry -> new SlotKey(entry.getAppointmentDate(), entry.getPreferredStartTime()))

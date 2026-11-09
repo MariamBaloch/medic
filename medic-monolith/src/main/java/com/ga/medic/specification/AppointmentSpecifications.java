@@ -10,11 +10,11 @@ import java.util.Locale;
 public class AppointmentSpecifications {
 
     public static Specification<Appointment> forDoctor(Long doctorId) {
-        return (root, query, cb) -> cb.equal(root.get("doctor").get("id"), doctorId);
+        return (root, query, cb) -> cb.equal(root.get("doctorId"), doctorId);
     }
 
     public static Specification<Appointment> forPatient(Long patientId) {
-        return (root, query, cb) -> cb.equal(root.get("patient").get("id"), patientId);
+        return (root, query, cb) -> cb.equal(root.get("patientId"), patientId);
     }
 
     public static Specification<Appointment> withOptionalDoctorName(String doctorName) {
@@ -24,10 +24,7 @@ public class AppointmentSpecifications {
             }
 
             String search = "%" + doctorName.trim().toLowerCase(Locale.ROOT) + "%";
-            var fullName = cb.concat(
-                    cb.concat(root.get("doctor").get("user").<String>get("firstName"), " "),
-                    root.get("doctor").get("user").<String>get("lastName"));
-            return cb.like(cb.lower(fullName), search);
+            return cb.like(cb.lower(root.get("doctorName")), search);
         };
     }
 
@@ -38,10 +35,7 @@ public class AppointmentSpecifications {
             }
 
             String search = "%" + patientName.trim().toLowerCase(Locale.ROOT) + "%";
-            var fullName = cb.concat(
-                    cb.concat(root.get("patient").get("user").<String>get("firstName"), " "),
-                    root.get("patient").get("user").<String>get("lastName"));
-            return cb.like(cb.lower(fullName), search);
+            return cb.like(cb.lower(root.get("patientName")), search);
         };
     }
 
@@ -62,6 +56,6 @@ public class AppointmentSpecifications {
 
     public static Specification<Appointment> withSpecialization(Long specializationId) {
         return (root, query, cb) -> specializationId == null ? null
-                : cb.equal(root.get("doctor").get("specialization").get("id"), specializationId);
+                : cb.equal(root.get("doctorSpecializationId"), specializationId);
     }
 }

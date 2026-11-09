@@ -123,37 +123,57 @@ FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'docto
 AND NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = dp.id AND reason = 'Sick Leave');
 
 -- Seed Appointments (Assume constraints on appointment_date and start_time to avoid unique constraint violation)
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '1 day', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'General Checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, pu.id, du.id,
+       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
+       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
+       dp.specialization_id,
+       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '1 day', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'General Checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient1@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '1 day' AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '2 days', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'Follow up', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, pu.id, du.id,
+       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
+       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
+       dp.specialization_id,
+       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '2 days', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'Follow up', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient2@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '2 days' AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '3 days', '10:00:00', '10:15:00', dp.consultation_fee, 'BOOKED', 'Headache', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, pu.id, du.id,
+       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
+       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
+       dp.specialization_id,
+       (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '3 days', '10:00:00', '10:15:00', dp.consultation_fee, 'BOOKED', 'Headache', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient1@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '3 days' AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '4 days', '13:00:00', '13:30:00', dp.consultation_fee, 'BOOKED', 'Migraine', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, pu.id, du.id,
+       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
+       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
+       dp.specialization_id,
+       (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '4 days', '13:00:00', '13:30:00', dp.consultation_fee, 'BOOKED', 'Migraine', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient2@medic.com'
 AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '4 days' AND a.start_time = '13:00:00');
 
 -- Seed past appointment history for Patient 1
-INSERT INTO appointment (doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + v.day_offset, v.start_time, v.end_time, dp.consultation_fee, v.status, v.reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT dp.id, pp.id, pu.id, du.id,
+       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
+       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
+       dp.specialization_id,
+       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + v.day_offset, v.start_time, v.end_time, dp.consultation_fee, v.status, v.reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
 CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
 CROSS JOIN (VALUES
@@ -191,6 +211,10 @@ seed_patients AS (
 seed_doctor AS (
     SELECT doctor_profiles.id AS doctor_id,
            doctor_profiles.consultation_fee,
+           doctor_profiles.specialization_id,
+           doctor_user.id AS doctor_user_id,
+           TRIM(BOTH FROM CONCAT(COALESCE(doctor_user.first_name, ''), ' ', COALESCE(doctor_user.last_name, ''))) AS doctor_name,
+           doctor_user.email AS doctor_email,
            (SELECT availability_rule.id
             FROM availability_rule
             WHERE availability_rule.doctor_id = doctor_profiles.id
@@ -200,22 +224,39 @@ seed_doctor AS (
     JOIN users doctor_user ON doctor_user.id = doctor_profiles.user_id
     WHERE doctor_user.email = 'doctor1@medic.com'
 ),
-candidate_slots AS (
+seed_patient_details AS (
     SELECT seed_patients.patient_id,
+           seed_patients.completed_count,
+           patient_user.id AS patient_user_id,
+           TRIM(BOTH FROM CONCAT(COALESCE(patient_user.first_name, ''), ' ', COALESCE(patient_user.last_name, ''))) AS patient_name,
+           patient_user.email AS patient_email
+    FROM seed_patients
+    JOIN patient_profile ON patient_profile.id = seed_patients.patient_id
+    JOIN users patient_user ON patient_user.id = patient_profile.user_id
+),
+candidate_slots AS (
+    SELECT seed_patient_details.patient_id,
+           seed_patient_details.patient_user_id,
+           seed_patient_details.patient_name,
+           seed_patient_details.patient_email,
            seed_doctor.doctor_id,
+           seed_doctor.doctor_user_id,
+           seed_doctor.doctor_name,
+           seed_doctor.doctor_email,
+           seed_doctor.specialization_id AS doctor_specialization_id,
            seed_doctor.availability_rule_id,
            seed_doctor.consultation_fee,
-           CURRENT_DATE - (30 + CAST(seed_patients.patient_id AS INTEGER) * 10 + slot_number.candidate_number)
+           CURRENT_DATE - (30 + CAST(seed_patient_details.patient_id AS INTEGER) * 10 + slot_number.candidate_number)
                AS appointment_date,
            TIME '10:00:00' AS start_time,
            TIME '10:30:00' AS end_time,
            slot_number.candidate_number,
-           seed_patients.completed_count
-    FROM seed_patients
+           seed_patient_details.completed_count
+    FROM seed_patient_details
     CROSS JOIN (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10))
         AS slot_number(candidate_number)
     CROSS JOIN seed_doctor
-    WHERE seed_patients.completed_count < 3
+    WHERE seed_patient_details.completed_count < 3
       AND seed_doctor.availability_rule_id IS NOT NULL
 ),
 available_candidates AS (
@@ -238,29 +279,15 @@ ranked_candidates AS (
     FROM available_candidates
 )
 INSERT INTO appointment (
-    doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time,
+    doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
+    doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time,
     booking_fee, status, reason, created_at, updated_at
 )
-SELECT doctor_id, patient_id, availability_rule_id, appointment_date, start_time, end_time,
+SELECT doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
+       doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time,
        consultation_fee, 'COMPLETED', 'Historical checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM ranked_candidates
 WHERE candidate_rank <= 3 - completed_count;
-
--- Seed Notifications
-INSERT INTO notification (user_id, type, action, title, message, read, created_at, updated_at)
-SELECT id, 'APPOINTMENT', 'BOOKED', 'Appointment Booked', 'Your appointment is booked', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users WHERE email = 'patient1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM notification n WHERE n.user_id = users.id AND title = 'Appointment Booked');
-
-INSERT INTO notification (user_id, type, action, title, message, read, created_at, updated_at)
-SELECT id, 'APPOINTMENT', 'BOOKED', 'New Appointment', 'A new patient has booked an appointment', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users WHERE email = 'doctor1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM notification n WHERE n.user_id = users.id AND title = 'New Appointment');
-
-INSERT INTO notification (user_id, type, action, title, message, read, created_at, updated_at)
-SELECT id, 'APPOINTMENT', 'CANCELLED', 'Appointment Cancelled', 'Your appointment was cancelled', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users WHERE email = 'patient2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM notification n WHERE n.user_id = users.id AND title = 'Appointment Cancelled');
 
 -- Seed Audit Logs
 INSERT INTO audit_log (username, action, entity_type, description, timestamp)

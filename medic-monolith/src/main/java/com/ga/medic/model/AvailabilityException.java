@@ -17,9 +17,8 @@ public class AvailabilityException extends Auditable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "doctor_id", nullable = false)
-    private DoctorProfile doctor;
+    @Column(name = "doctor_id", nullable = false)
+    private Long doctorId;
 
     @Column(nullable = false)
     private LocalDate exceptionDate;

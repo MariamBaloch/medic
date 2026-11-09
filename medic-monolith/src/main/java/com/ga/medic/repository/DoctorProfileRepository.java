@@ -36,7 +36,7 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Lo
                       and exists (
                           select rule.id
                           from AvailabilityRule rule
-                          where rule.doctor = doctorProfile
+                          where rule.doctorId = doctorProfile.id
                             and (rule.endDate is null or rule.endDate >= :today)
                       )
                   )
@@ -45,7 +45,7 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Lo
                       and not exists (
                           select rule.id
                           from AvailabilityRule rule
-                          where rule.doctor = doctorProfile
+                          where rule.doctorId = doctorProfile.id
                             and (rule.endDate is null or rule.endDate >= :today)
                       )
                   )

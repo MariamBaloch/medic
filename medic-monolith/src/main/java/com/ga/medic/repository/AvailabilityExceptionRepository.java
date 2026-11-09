@@ -15,21 +15,21 @@ public interface AvailabilityExceptionRepository extends JpaRepository<Availabil
      * Retrieves a list of availability exceptions for a specific doctor on a given date,
      * excluding the exception with the specified ID.
      */
-    @Query("SELECT e FROM AvailabilityException e WHERE e.doctor.id = :doctorId AND e.exceptionDate = :date AND e.id <> :excludeId")
+    @Query("SELECT e FROM AvailabilityException e WHERE e.doctorId = :doctorId AND e.exceptionDate = :date AND e.id <> :excludeId")
     List<AvailabilityException> findByDoctorAndDateExcluding(@Param("doctorId") Long doctorId, @Param("date") LocalDate date, @Param("excludeId") Long excludeId);
 
-    Optional<AvailabilityException> findByIdAndDoctorId(Long exceptionId, Long id);
+    Optional<AvailabilityException> findByIdAndDoctorId(Long exceptionId, Long doctorId);
 
     /**
      * Retrieves a list of current and future availability exceptions for a specific doctor,
      * ordered by the exception date.
      */
-    @Query("SELECT e FROM AvailabilityException e WHERE e.doctor.id = :doctorId AND e.exceptionDate >= :today ORDER BY e.exceptionDate")
+    @Query("SELECT e FROM AvailabilityException e WHERE e.doctorId = :doctorId AND e.exceptionDate >= :today ORDER BY e.exceptionDate")
     List<AvailabilityException> findCurrentAndFutureByDoctorId(@Param("doctorId") Long doctorId, @Param("today") LocalDate today);
 
     /**
      * All exceptions for a doctor within a date range.
      */
-    @Query("SELECT e FROM AvailabilityException e WHERE e.doctor.id = :doctorId AND e.exceptionDate >= :from AND e.exceptionDate <= :to")
+    @Query("SELECT e FROM AvailabilityException e WHERE e.doctorId = :doctorId AND e.exceptionDate >= :from AND e.exceptionDate <= :to")
     List<AvailabilityException> findByDoctorAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

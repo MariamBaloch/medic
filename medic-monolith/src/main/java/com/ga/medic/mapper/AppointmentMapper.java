@@ -9,13 +9,16 @@ import com.ga.medic.dto.response.AppointmentPatientResponse;
 import com.ga.medic.dto.response.AppointmentPatientDetailResponse;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusResponse;
+import com.ga.medic.dto.response.SpecializationResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.model.PatientProfile;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -24,19 +27,36 @@ import java.util.List;
 public interface AppointmentMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "doctor", source = "doctor")
-    @Mapping(target = "patient", source = "patient")
+    @Mapping(target = "doctorId", ignore = true)
+    @Mapping(target = "patientId", ignore = true)
+    @Mapping(target = "patientUserId", ignore = true)
+    @Mapping(target = "doctorUserId", ignore = true)
+    @Mapping(target = "patientName", ignore = true)
+    @Mapping(target = "patientEmail", ignore = true)
+    @Mapping(target = "doctorName", ignore = true)
+    @Mapping(target = "doctorEmail", ignore = true)
+    @Mapping(target = "doctorSpecializationId", ignore = true)
     @Mapping(target = "appointmentDate", source = "request.date")
     @Mapping(target = "startTime", source = "request.startTime")
     @Mapping(target = "endTime", source = "endTime")
     @Mapping(target = "bookingFee", source = "doctor.consultationFee")
     @Mapping(target = "status", constant = "BOOKED")
     @Mapping(target = "reason", source = "request.reason")
-    @Mapping(target = "availabilityRule", source = "rule")
+    @Mapping(target = "availabilityRuleId", source = "rule.id")
+    @Mapping(target = "cancelledReason", ignore = true)
+    @Mapping(target = "version", ignore = true)
     Appointment toEntity(AppointmentBookingRequest request, DoctorProfile doctor, PatientProfile patient, AvailabilityRule rule, LocalTime endTime);
 
-    @Mapping(target = "doctor", source = "doctor")
-    @Mapping(target = "patient", source = "patient")
+    @AfterMapping
+    default void populateSnapshots(
+            @MappingTarget Appointment appointment,
+            DoctorProfile doctor,
+            PatientProfile patient) {
+        appointment.applyPartySnapshots(patient, doctor);
+    }
+
+    @Mapping(target = "doctor", expression = "java(doctorFromSnapshot(appointment))")
+    @Mapping(target = "patient", expression = "java(patientFromSnapshot(appointment))")
     @Mapping(target = "version", source = "version")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")
@@ -58,8 +78,15 @@ public interface AppointmentMapper {
 
     @Mapping(target = "doctor", source = "doctor")
     @Mapping(target = "patient", source = "patient")
-    @Mapping(target = "version", source = "version")
-    AppointmentDetailResponse toDetailResponse(Appointment appointment);
+    @Mapping(target = "version", source = "appointment.version")
+    @Mapping(target = "appointmentDate", source = "appointment.appointmentDate")
+    @Mapping(target = "startTime", source = "appointment.startTime")
+    @Mapping(target = "endTime", source = "appointment.endTime")
+    @Mapping(target = "bookingFee", source = "appointment.bookingFee")
+    @Mapping(target = "status", source = "appointment.status")
+    @Mapping(target = "reason", source = "appointment.reason")
+    @Mapping(target = "cancelledReason", source = "appointment.cancelledReason")
+    AppointmentDetailResponse toDetailResponse(Appointment appointment, DoctorProfile doctor, PatientProfile patient);
 
     @Mapping(target = "doctorName", source = "user.fullName")
     @Mapping(target = "doctorImageUrl", source = "user.imageUrl")
@@ -83,4 +110,25 @@ public interface AppointmentMapper {
     AppointmentStatusResponse toStatusResponse(AppointmentStatusEnum status);
 
     List<AppointmentStatusResponse> toStatusResponses(List<AppointmentStatusEnum> statuses);
+
+    default AppointmentDoctorResponse doctorFromSnapshot(Appointment appointment) {
+        SpecializationResponse specialization = appointment.getDoctorSpecializationId() == null
+                ? null
+                : new SpecializationResponse(appointment.getDoctorSpecializationId(), null, null);
+        return new AppointmentDoctorResponse(
+                appointment.getDoctorId(),
+                appointment.getDoctorName(),
+                null,
+                specialization,
+                null
+        );
+    }
+
+    default AppointmentPatientResponse patientFromSnapshot(Appointment appointment) {
+        return new AppointmentPatientResponse(
+                appointment.getPatientId(),
+                appointment.getPatientName(),
+                null
+        );
+    }
 }

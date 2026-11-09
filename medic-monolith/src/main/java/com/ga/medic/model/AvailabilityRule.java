@@ -20,9 +20,8 @@ public class AvailabilityRule extends Auditable {
     @Column(nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "doctor_id", nullable = false)
-    private DoctorProfile doctor;
+    @Column(name = "doctor_id", nullable = false)
+    private Long doctorId;
 
     @Column(nullable = false)
     private LocalDate startDate;

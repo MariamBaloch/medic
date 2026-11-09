@@ -16,13 +16,13 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     /**
      * Non-canceled appointments for a doctor within a date range.
      */
-    @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
+    @Query("SELECT a FROM Appointment a WHERE a.doctorId = :doctorId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
     List<Appointment> findActiveByDoctorAndDateRange(@Param("doctorId") Long doctorId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /**
      * Non-canceled appointments for a patient within a date range, used to calculate waitlist eligibility.
      */
-    @Query("SELECT a FROM Appointment a WHERE a.patient.id = :patientId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
+    @Query("SELECT a FROM Appointment a WHERE a.patientId = :patientId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
     List<Appointment> findActiveByPatientAndDateRange(@Param("patientId") Long patientId,
                                                        @Param("from") LocalDate from,
                                                        @Param("to") LocalDate to);
@@ -32,26 +32,26 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     /**
      * Retrieves a list of active, non-canceled appointments for a specific doctor on a given date.
      */
-    @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED")
+    @Query("SELECT a FROM Appointment a WHERE a.doctorId = :doctorId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED")
     List<Appointment> findActiveByDoctorAndDate(@Param("doctorId") Long doctorId, @Param("date") LocalDate date);
 
     /**
      * Retrieves a list of active, non-canceled appointments for a specific doctor on a given date and time range.
      */
-    @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
+    @Query("SELECT a FROM Appointment a WHERE a.doctorId = :doctorId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
     List<Appointment> findActiveByDoctorAndDateAndTimeRange(@Param("doctorId") Long doctorId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
 
     /**
      * Check if a patient already has a not canceled appointment at the given time
      */
-    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.patient.id = :patientId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
+    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.patientId = :patientId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
     boolean existsOverlappingForPatient(@Param("patientId") Long patientId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
 
     /**
      * Checks whether the patient has another non-canceled appointment that overlaps the requested time,
      * excluding the appointment being rescheduled.
      */
-    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.patient.id = :patientId AND a.id <> :excludedAppointmentId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
+    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.patientId = :patientId AND a.id <> :excludedAppointmentId AND a.appointmentDate = :date AND a.status <> AppointmentStatusEnum.CANCELLED AND a.startTime < :endTime AND a.endTime > :startTime")
     boolean existsOverlappingForPatientExcludingAppointment(@Param("patientId") Long patientId,
                                                             @Param("date") LocalDate date,
                                                             @Param("startTime") LocalTime startTime,
@@ -61,6 +61,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     /**
      * Check if a specific slot is already taken (non-canceled).
      */
-    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.doctor.id = :doctorId AND a.appointmentDate = :date AND a.startTime = :startTime AND a.status <> AppointmentStatusEnum.CANCELLED")
+    @Query("SELECT COUNT(a) > 0 FROM Appointment a WHERE a.doctorId = :doctorId AND a.appointmentDate = :date AND a.startTime = :startTime AND a.status <> AppointmentStatusEnum.CANCELLED")
     boolean existsActiveByDoctorAndSlot(@Param("doctorId") Long doctorId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime);
 }
