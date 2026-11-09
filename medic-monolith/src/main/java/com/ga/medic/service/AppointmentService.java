@@ -200,10 +200,9 @@ public class AppointmentService {
      */
     @Transactional(noRollbackFor = WaitlistOfferConflictException.class)
     public AppointmentResponse bookAppointment(AppointmentBookingRequest request) {
-        PatientProfile authenticatedPatient = authenticatedUser.get().user().getPatientProfile();
-
-        // Lock patient to prevent from booking overlapping appointments at the same time
-        PatientProfile patient = patientProfileRepository.findByIdForUpdate(authenticatedPatient.getId())
+        Long patientId = authenticatedUser.requirePatientId();
+        slotLockService.acquirePatient(patientId);
+        PatientProfile patient = patientProfileRepository.findById(patientId)
                 .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
 
         slotLockService.acquire(request.doctorId(), request.date(), request.startTime());
@@ -276,13 +275,9 @@ public class AppointmentService {
      */
     @Transactional(noRollbackFor = WaitlistOfferConflictException.class)
     public AppointmentResponse rescheduleAppointment(Long appointmentId, RescheduleAppointmentRequest request) {
-        PatientProfile authenticatedPatient = authenticatedUser.get().user().getPatientProfile();
-        if (authenticatedPatient == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
-
-        // Lock patient to prevent from rescheduling overlapping appointments at the same time
-        PatientProfile patient = patientProfileRepository.findByIdForUpdate(authenticatedPatient.getId())
+        Long patientId = authenticatedUser.requirePatientId();
+        slotLockService.acquirePatient(patientId);
+        PatientProfile patient = patientProfileRepository.findById(patientId)
                 .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
@@ -400,13 +395,9 @@ public class AppointmentService {
      */
     @Transactional
     public AppointmentResponse cancelAppointment(Long appointmentId, CancelAppointmentRequest request) {
-        Long currentUserId = authenticatedUser.getUserId();
-
-        PatientProfile identity = authenticatedUser.get().user().getPatientProfile();
-        if (identity == null) {
-            throw new InformationNotFoundException("Patient profile not found");
-        }
-        PatientProfile patient = patientProfileRepository.findByIdForUpdate(identity.getId())
+        Long patientId = authenticatedUser.requirePatientId();
+        slotLockService.acquirePatient(patientId);
+        PatientProfile patient = patientProfileRepository.findById(patientId)
                 .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));

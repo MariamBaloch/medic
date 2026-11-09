@@ -22,6 +22,16 @@ public class AppointmentSlotLockService {
     private final JdbcTemplate jdbcTemplate;
 
     /**
+     * Acquires a transaction-level lock for a patient's booking mutations
+     * (book / reschedule / cancel / waitlist). Must be taken before slot locks.
+     *
+     * @param patientId the patient profile ID
+     */
+    public void acquirePatient(Long patientId) {
+        acquireKey("patient-booking:" + patientId);
+    }
+
+    /**
      * Acquires a transaction-level lock for a specific appointment slot.
      * Concurrent transactions requesting the same slot must wait until the
      * current transaction completes.
@@ -33,13 +43,16 @@ public class AppointmentSlotLockService {
      *                               is not supported
      */
     public void acquire(Long doctorId, LocalDate date, LocalTime startTime) {
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException(
-                    "Appointment slot locks must be acquired inside an active transaction");
-        }
-
         String key = "appointment-slot:" + doctorId + ":" + date + ":"
                 + startTime.format(SLOT_TIME);
+        acquireKey(key);
+    }
+
+    private void acquireKey(String key) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "Booking locks must be acquired inside an active transaction");
+        }
 
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
             String database = connection.getMetaData().getDatabaseProductName();
@@ -50,7 +63,7 @@ public class AppointmentSlotLockService {
 
             if (!"PostgreSQL".equalsIgnoreCase(database)) {
                 throw new IllegalStateException(
-                        "Appointment slot locking requires PostgreSQL");
+                        "Booking advisory locking requires PostgreSQL");
             }
 
             try (PreparedStatement statement = connection.prepareStatement(
