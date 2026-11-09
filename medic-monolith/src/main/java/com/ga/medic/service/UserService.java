@@ -8,7 +8,8 @@ import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.UserMapper;
 import com.ga.medic.model.User;
 import com.ga.medic.repository.UserRepository;
-import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.common.security.TokenVersionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class UserService {
     private final FileStorageService storageService;
     private final AuthenticatedUser authenticatedUser;
     private final UserMapper userMapper;
+    private final TokenVersionService tokenVersionService;
 
     /**
      * Validates and stores a replacement avatar, then updates the authenticated user's image URL.
@@ -111,5 +113,7 @@ public class UserService {
         user.setTokenExpiry(null);
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiry(null);
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        tokenVersionService.store(user.getId(), user.getTokenVersion());
     }
 }

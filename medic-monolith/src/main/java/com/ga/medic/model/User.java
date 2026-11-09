@@ -68,6 +68,9 @@ public class User extends Auditable {
     @Column
     private LocalDateTime resetPasswordTokenExpiry;
 
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion = 0;
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private PatientProfile patientProfile;
 
