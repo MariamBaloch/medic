@@ -253,13 +253,14 @@ public class AppointmentService {
         log.info("Appointment booked: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
                 appointment.getId(), patient.getId(), doctor.getId(), request.date(), request.startTime());
 
-        notificationService.createAndSend(doctor.getUser(), NotificationType.APPOINTMENT, NotificationAction.BOOKED,
-                "New Appointment Booking",
-                "You have a new appointment booking from " + patient.getUser().getFullName()
-                        + " on " + request.date()
-                        + " from " + request.startTime()
-                        + " to " + endTime + ".",
-                false, appointment.getId()
+        outboxService.append(EventTypes.BOOKING_APPOINTMENT_CREATED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(patient, doctor),
+                        "appointmentId", appointment.getId(),
+                        "date", request.date().toString(),
+                        "startTime", request.startTime().toString(),
+                        "endTime", endTime.toString(),
+                        "status", AppointmentStatusEnum.BOOKED.name()
+                )
         );
 
         return appointmentMapper.toResponse(appointment);
@@ -376,17 +377,16 @@ public class AppointmentService {
                 appointment.getId(), patient.getId(), doctor.getId(), oldDate, oldStartTime,
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
-        notificationService.createAndSend(patient.getUser(), NotificationType.APPOINTMENT,
-                NotificationAction.RESCHEDULED, "Appointment Rescheduled",
-                "Your appointment with " + doctor.getUser().getFullName() + " has been rescheduled to "
-                        + appointment.getAppointmentDate() + " at " + appointment.getStartTime() + ".",
-                false, appointment.getId());
-
-        notificationService.createAndSend(doctor.getUser(), NotificationType.APPOINTMENT,
-                NotificationAction.RESCHEDULED, "Patient Rescheduled Appointment",
-                patient.getUser().getFullName() + " rescheduled their appointment to "
-                        + appointment.getAppointmentDate() + " at " + appointment.getStartTime() + ".",
-                false, appointment.getId());
+        outboxService.append(EventTypes.BOOKING_APPOINTMENT_RESCHEDULED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(patient, doctor),
+                        "appointmentId", appointment.getId(),
+                        "oldDate", oldDate.toString(),
+                        "oldStartTime", oldStartTime.toString(),
+                        "date", appointment.getAppointmentDate().toString(),
+                        "startTime", appointment.getStartTime().toString(),
+                        "endTime", appointment.getEndTime().toString()
+                )
+        );
 
         return appointmentMapper.toResponse(appointment);
     }
@@ -447,16 +447,13 @@ public class AppointmentService {
                 appointment.getId(), patient.getId(), appointment.getDoctor().getId(),
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
-        notificationService.createAndSend(
-                appointment.getDoctor().getUser(),
-                NotificationType.APPOINTMENT,
-                NotificationAction.CANCELLED,
-                "Appointment Cancelled",
-                "Appointment cancelled by " + authenticatedUser.get().user().getFullName()
-                        + " for " + appointment.getAppointmentDate()
-                        + " at " + appointment.getStartTime() + ".",
-                false,
-                appointment.getId()
+        outboxService.append(EventTypes.BOOKING_APPOINTMENT_CANCELLED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(appointment),
+                        "appointmentId", appointment.getId(),
+                        "date", appointment.getAppointmentDate().toString(),
+                        "startTime", appointment.getStartTime().toString(),
+                        "status", AppointmentStatusEnum.CANCELLED.name()
+                )
         );
 
         return appointmentMapper.toResponse(appointment);
@@ -489,6 +486,14 @@ public class AppointmentService {
 
         appointment.setStatus(status);
         appointment = appointmentRepository.save(appointment);
+
+        outboxService.append(EventTypes.BOOKING_APPOINTMENT_STATUS_CHANGED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
+                        outboxPayloadMapper.bookingParties(appointment),
+                        "appointmentId", appointment.getId(),
+                        "status", status.name()
+                )
+        );
+
         return appointmentMapper.toResponse(appointment);
     }
 
