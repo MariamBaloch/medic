@@ -21,7 +21,7 @@ public class ProcessedEventRetentionJob {
 
     private final ProcessedEventRepository processedEventRepository;
 
-    @Value("${app.processed-event.retention-days:7}")
+    @Value("${app.processed-event.retention-days:14}")
     private int retentionDays;
 
     @Scheduled(cron = "${app.processed-event.retention-cron:0 15 3 * * *}")
