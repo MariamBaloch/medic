@@ -20,6 +20,9 @@
         <module>medic-common</module>
         <module>medic-monolith</module>
         <module>gateway-service</module>
+        <module>notification-service</module>
+        <module>audit-service</module>
+        <module>identity-service</module>
     </modules>
 
     <properties>
