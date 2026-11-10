@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -16,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -30,16 +34,26 @@ public class OutboxPublisher {
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
+    @Value("${app.outbox.max-attempts:10}")
+    private int maxAttempts;
+
     @Scheduled(fixedDelayString = "${app.outbox.publish-interval-ms:5000}")
     @Transactional
     public void publishBatch() {
-        List<OutboxEvent> batch = outboxEventRepository.findTop50ByPublishedAtIsNullOrderByCreatedAtAsc();
+        List<OutboxEvent> batch = outboxEventRepository.lockNextBatch(maxAttempts, PageRequest.ofSize(50));
         if (batch.isEmpty()) {
             return;
         }
 
         Instant now = Instant.now();
+        Set<String> blockedAggregates = new HashSet<>();
+
         for (OutboxEvent event : batch) {
+            String aggregateKey = event.getAggregateType() + ":" + event.getAggregateId();
+            if (blockedAggregates.contains(aggregateKey)) {
+                continue;
+            }
+
             event.setAttempts(event.getAttempts() + 1);
             try {
                 String topic = TopicNames.forEventType(event.getEventType());
@@ -63,18 +77,29 @@ public class OutboxPublisher {
                         event.getCorrelationId());
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                log.error("Interrupted while publishing outbox event: eventId={}, type={}, attempts={}",
-                        event.getEventId(),
-                        event.getEventType(),
-                        event.getAttempts(),
-                        exception);
+                blockedAggregates.add(aggregateKey);
+                logFailed(event, exception);
             } catch (Exception exception) {
-                log.error("Failed to publish outbox event: eventId={}, type={}, attempts={}",
-                        event.getEventId(),
-                        event.getEventType(),
-                        event.getAttempts(),
-                        exception);
+                blockedAggregates.add(aggregateKey);
+                logFailed(event, exception);
             }
         }
+    }
+
+    private void logFailed(OutboxEvent event, Exception exception) {
+        if (event.getAttempts() >= maxAttempts) {
+            log.error("Outbox event exhausted retries and will be skipped: eventId={}, type={}, attempts={}, maxAttempts={}",
+                    event.getEventId(),
+                    event.getEventType(),
+                    event.getAttempts(),
+                    maxAttempts,
+                    exception);
+            return;
+        }
+        log.error("Failed to publish outbox event: eventId={}, type={}, attempts={}",
+                event.getEventId(),
+                event.getEventType(),
+                event.getAttempts(),
+                exception);
     }
 }
