@@ -1,7 +1,7 @@
 package com.ga.medic.mapper;
 
-import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
-import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
 import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;

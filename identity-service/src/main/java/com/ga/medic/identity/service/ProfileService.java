@@ -11,7 +11,7 @@ import com.ga.medic.identity.model.DoctorProfile;
 import com.ga.medic.identity.model.PatientProfile;
 import com.ga.medic.identity.repository.DoctorProfileRepository;
 import com.ga.medic.identity.repository.PatientProfileRepository;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

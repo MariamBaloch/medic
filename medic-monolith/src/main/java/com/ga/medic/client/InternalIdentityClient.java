@@ -1,7 +1,7 @@
 package com.ga.medic.client;
 
-import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
-import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.exception.InformationNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

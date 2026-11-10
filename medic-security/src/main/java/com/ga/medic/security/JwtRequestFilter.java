@@ -1,4 +1,4 @@
-package com.ga.medic.common.security;
+package com.ga.medic.security;
 
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;

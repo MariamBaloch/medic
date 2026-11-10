@@ -4,7 +4,7 @@ import com.ga.medic.notification.dto.MarkAllNotificationsReadResponse;
 import com.ga.medic.notification.dto.NotificationResponse;
 import com.ga.medic.notification.dto.PageResponse;
 import com.ga.medic.notification.dto.UnreadNotificationCountResponse;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -1,7 +1,7 @@
 package com.ga.medic.identity.service;
 
-import com.ga.medic.identity.dto.response.InternalDoctorSnapshotResponse;
-import com.ga.medic.identity.dto.response.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.identity.exception.InformationNotFoundException;
 import com.ga.medic.identity.model.DoctorProfile;
 import com.ga.medic.identity.model.PatientProfile;

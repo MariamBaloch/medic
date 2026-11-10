@@ -1,6 +1,7 @@
 package com.ga.medic.identity.security;
 
-import com.ga.medic.common.security.JwtRequestFilter;
+import com.ga.medic.security.InternalApiKeyFilter;
+import com.ga.medic.security.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

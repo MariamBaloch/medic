@@ -1,4 +1,4 @@
-package com.ga.medic.common.security;
+package com.ga.medic.security;
 
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;

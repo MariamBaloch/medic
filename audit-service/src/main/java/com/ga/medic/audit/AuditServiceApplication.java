@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = {
         "com.ga.medic.audit",
-        "com.ga.medic.common.security"
+        "com.ga.medic.security"
 })
 @EnableScheduling
 public class AuditServiceApplication {

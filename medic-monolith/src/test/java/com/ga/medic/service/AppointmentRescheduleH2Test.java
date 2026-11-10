@@ -10,7 +10,7 @@ import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityExceptionRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.support.IdentityTestData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

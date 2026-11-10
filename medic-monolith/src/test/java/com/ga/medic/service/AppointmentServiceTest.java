@@ -1,8 +1,8 @@
 package com.ga.medic.service;
 
 import com.ga.medic.client.InternalIdentityClient;
-import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
-import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
@@ -19,7 +19,7 @@ import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.support.IdentityTestData;
 import jakarta.persistence.EntityManager;
 import org.junit.Before;

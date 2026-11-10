@@ -1,5 +1,6 @@
-package com.ga.medic.common.security;
+package com.ga.medic.security;
 
+import com.ga.medic.common.security.JwtClaims;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;

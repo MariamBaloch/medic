@@ -1,6 +1,6 @@
 package com.ga.medic.service;
 
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.dto.request.AvailabilityExceptionRequest;
 import com.ga.medic.dto.response.AvailabilityExceptionDeleteResponse;
 import com.ga.medic.dto.response.AvailabilityExceptionResponse;

@@ -67,8 +67,8 @@ public class AppointmentWaitlistEntry extends Auditable {
     private Long version;
 
     public void applyPartySnapshots(
-            com.ga.medic.client.dto.InternalPatientSnapshotResponse patient,
-            com.ga.medic.client.dto.InternalDoctorSnapshotResponse doctor
+            com.ga.medic.common.contract.InternalPatientSnapshotResponse patient,
+            com.ga.medic.common.contract.InternalDoctorSnapshotResponse doctor
     ) {
         this.patientId = patient.patientId();
         this.doctorId = doctor.doctorId();

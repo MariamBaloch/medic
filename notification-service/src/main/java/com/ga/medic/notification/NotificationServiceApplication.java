@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = {
         "com.ga.medic.notification",
-        "com.ga.medic.common.security"
+        "com.ga.medic.security"
 })
 @EnableJpaAuditing
 @EnableScheduling

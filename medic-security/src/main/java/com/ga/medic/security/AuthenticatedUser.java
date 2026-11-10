@@ -1,4 +1,4 @@
-package com.ga.medic.common.security;
+package com.ga.medic.security;
 
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;

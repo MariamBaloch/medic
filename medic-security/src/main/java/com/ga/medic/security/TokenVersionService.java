@@ -1,4 +1,4 @@
-package com.ga.medic.common.security;
+package com.ga.medic.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;

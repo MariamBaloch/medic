@@ -2,7 +2,7 @@ package com.ga.medic.identity.aspect;
 
 import com.ga.medic.identity.annotation.AuditLogger;
 import com.ga.medic.common.event.EventTypes;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.identity.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

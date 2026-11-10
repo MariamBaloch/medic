@@ -1,7 +1,7 @@
 package com.ga.medic.service;
 
 import com.ga.medic.common.event.EventTypes;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistFilterRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
@@ -20,8 +20,8 @@ import com.ga.medic.mapper.AppointmentWaitlistEntryMapper;
 import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.client.InternalIdentityClient;
-import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
-import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
 import jakarta.persistence.EntityManager;

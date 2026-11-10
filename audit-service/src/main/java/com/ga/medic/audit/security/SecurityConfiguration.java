@@ -1,6 +1,6 @@
 package com.ga.medic.audit.security;
 
-import com.ga.medic.common.security.JwtRequestFilter;
+import com.ga.medic.security.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

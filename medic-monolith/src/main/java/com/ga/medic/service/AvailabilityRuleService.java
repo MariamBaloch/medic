@@ -15,7 +15,7 @@ import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AppointmentWaitlistEntryRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.client.InternalIdentityClient;
-import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;

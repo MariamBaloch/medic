@@ -1,7 +1,7 @@
 package com.ga.medic.identity.security;
 
 import com.ga.medic.common.security.JwtClaims;
-import com.ga.medic.common.security.JwtSupport;
+import com.ga.medic.security.JwtSupport;
 import com.ga.medic.identity.model.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
