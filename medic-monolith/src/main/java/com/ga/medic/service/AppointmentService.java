@@ -18,8 +18,9 @@ import com.ga.medic.mapper.PageMapper;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
-import com.ga.medic.repository.PatientProfileRepository;
+import com.ga.medic.client.InternalIdentityClient;
+import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
+import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
 import com.ga.medic.common.security.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -46,8 +47,7 @@ import static com.ga.medic.specification.AppointmentSpecifications.*;
 @Slf4j
 public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
-    private final DoctorProfileRepository doctorProfileRepository;
-    private final PatientProfileRepository patientProfileRepository;
+    private final InternalIdentityClient internalIdentityClient;
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
     private final AppointmentMapper appointmentMapper;
@@ -115,10 +115,8 @@ public class AppointmentService {
             throw new ForbiddenActionException("You can only view appointments you are associated with");
         }
 
-        DoctorProfile doctor = doctorProfileRepository.findById(appointment.getDoctorId())
-                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
-        PatientProfile patient = patientProfileRepository.findById(appointment.getPatientId())
-                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(appointment.getDoctorId());
+        InternalPatientSnapshotResponse patient = internalIdentityClient.getPatientSnapshot(appointment.getPatientId());
         return appointmentMapper.toDetailResponse(appointment, doctor, patient);
     }
 
@@ -207,17 +205,16 @@ public class AppointmentService {
     public AppointmentResponse bookAppointment(AppointmentBookingRequest request) {
         Long patientId = authenticatedUser.requirePatientId();
         slotLockService.acquirePatient(patientId);
-        PatientProfile patient = patientProfileRepository.findById(patientId)
-                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        InternalPatientSnapshotResponse patient = internalIdentityClient.getPatientSnapshot(patientId);
 
         slotLockService.acquire(request.doctorId(), request.date(), request.startTime());
         waitlistService.advanceExpiredOfferIfNeeded(request.doctorId(), request.date(), request.startTime());
 
         log.info("Booking appointment: patientId={}, doctorId={}, date={}, startTime={}",
-                patient.getId(), request.doctorId(), request.date(), request.startTime());
+                patient.patientId(), request.doctorId(), request.date(), request.startTime());
 
-        DoctorProfile doctor = doctorProfileRepository.findById(request.doctorId()).orElseThrow(() -> new InformationNotFoundException("Doctor not found"));
-        List<AvailableSlotResponse> availableSlots = availabilityRuleService.getAvailability(doctor.getId(), request.date(), request.date());
+        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(request.doctorId());
+        List<AvailableSlotResponse> availableSlots = availabilityRuleService.getAvailability(doctor.doctorId(), request.date(), request.date());
 
         // Recheck the generated schedule and current booking state after acquiring the slot lock.
         AvailableSlotResponse matchingSlot = availableSlots.stream()
@@ -230,22 +227,22 @@ public class AppointmentService {
 
         LocalTime endTime = matchingSlot.endTime();
 
-        if (waitlistService.hasActiveOffer(doctor.getId(), request.date(), request.startTime())) {
+        if (waitlistService.hasActiveOffer(doctor.doctorId(), request.date(), request.startTime())) {
             log.warn("Appointment booking blocked by waitlist offer: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new WaitlistOfferConflictException("This slot is reserved by an active waitlist offer");
         }
 
-        if (appointmentRepository.existsActiveByDoctorAndSlot(doctor.getId(), request.date(), request.startTime())) {
+        if (appointmentRepository.existsActiveByDoctorAndSlot(doctor.doctorId(), request.date(), request.startTime())) {
             log.warn("Appointment booking conflict: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new SlotNotAvailableException("This slot has just been booked by another patient");
         }
 
         // Check if patient already has an appointment at this time
-        if (appointmentRepository.existsOverlappingForPatient(patient.getId(), request.date(), request.startTime(), endTime)) {
+        if (appointmentRepository.existsOverlappingForPatient(patient.patientId(), request.date(), request.startTime(), endTime)) {
             log.warn("Appointment booking overlap conflict: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new SlotNotAvailableException("You already have an overlapping appointment at this time");
         }
 
@@ -255,7 +252,7 @@ public class AppointmentService {
         appointment = appointmentRepository.saveAndFlush(appointment);
 
         log.info("Appointment booked: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                appointment.getId(), patient.getId(), doctor.getId(), request.date(), request.startTime());
+                appointment.getId(), patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
 
         outboxService.append(EventTypes.BOOKING_APPOINTMENT_CREATED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
                         outboxPayloadMapper.bookingParties(patient, doctor),
@@ -282,12 +279,11 @@ public class AppointmentService {
     public AppointmentResponse rescheduleAppointment(Long appointmentId, RescheduleAppointmentRequest request) {
         Long patientId = authenticatedUser.requirePatientId();
         slotLockService.acquirePatient(patientId);
-        PatientProfile patient = patientProfileRepository.findById(patientId)
-                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        InternalPatientSnapshotResponse patient = internalIdentityClient.getPatientSnapshot(patientId);
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
-        if (!Objects.equals(appointment.getPatientId(), patient.getId())) {
+        if (!Objects.equals(appointment.getPatientId(), patient.patientId())) {
             throw new ForbiddenActionException("You can only reschedule your own appointments");
         }
         if (appointment.getStatus() != AppointmentStatusEnum.BOOKED) {
@@ -312,8 +308,7 @@ public class AppointmentService {
         }
 
         Long doctorId = appointment.getDoctorId();
-        DoctorProfile doctor = doctorProfileRepository.findById(doctorId)
-                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
+        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(doctorId);
         LocalDate initiallyObservedDate = appointment.getAppointmentDate();
         LocalTime initiallyObservedStart = appointment.getStartTime();
         slotLockService.acquireAll(List.of(
@@ -323,7 +318,7 @@ public class AppointmentService {
         if (!appointment.getAppointmentDate().equals(initiallyObservedDate)
                 || !appointment.getStartTime().equals(initiallyObservedStart)
                 || appointment.getStatus() != AppointmentStatusEnum.BOOKED
-                || !Objects.equals(appointment.getPatientId(), patient.getId())
+                || !Objects.equals(appointment.getPatientId(), patient.patientId())
                 || !Objects.equals(appointment.getVersion(), request.expectedVersion())) {
             throw new ObjectOptimisticLockingFailureException(Appointment.class, appointmentId);
         }
@@ -336,12 +331,12 @@ public class AppointmentService {
         waitlistService.advanceExpiredOfferIfNeeded(doctorId, request.date(), request.startTime());
 
         log.info("Rescheduling appointment: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
-                appointmentId, patient.getId(), doctorId, appointment.getAppointmentDate(),
+                appointmentId, patient.patientId(), doctorId, appointment.getAppointmentDate(),
                 appointment.getStartTime(), request.date(), request.startTime());
 
         if (waitlistService.hasActiveOffer(doctorId, request.date(), request.startTime())) {
             log.warn("Appointment reschedule blocked by waitlist offer: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                    appointmentId, patient.getId(), doctorId, request.date(), request.startTime());
+                    appointmentId, patient.patientId(), doctorId, request.date(), request.startTime());
             throw new WaitlistOfferConflictException("The requested time is reserved by an active waitlist offer");
         }
 
@@ -359,7 +354,7 @@ public class AppointmentService {
         }
 
         if (appointmentRepository.existsOverlappingForPatientExcludingAppointment(
-                patient.getId(), request.date(), targetSlot.startTime(), targetSlot.endTime(), appointmentId)) {
+                patient.patientId(), request.date(), targetSlot.startTime(), targetSlot.endTime(), appointmentId)) {
             throw new SlotNotAvailableException("You already have an overlapping appointment at this time");
         }
 
@@ -376,7 +371,7 @@ public class AppointmentService {
         waitlistService.offerNextWaiting(doctorId, oldDate, oldStartTime);
 
         log.info("Appointment rescheduled: appointmentId={}, patientId={}, doctorId={}, from={}/{}, to={}/{}",
-                appointment.getId(), patient.getId(), doctorId, oldDate, oldStartTime,
+                appointment.getId(), patient.patientId(), doctorId, oldDate, oldStartTime,
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
         outboxService.append(EventTypes.BOOKING_APPOINTMENT_RESCHEDULED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(
@@ -404,8 +399,7 @@ public class AppointmentService {
     public AppointmentResponse cancelAppointment(Long appointmentId, CancelAppointmentRequest request) {
         Long patientId = authenticatedUser.requirePatientId();
         slotLockService.acquirePatient(patientId);
-        PatientProfile patient = patientProfileRepository.findById(patientId)
-                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        InternalPatientSnapshotResponse patient = internalIdentityClient.getPatientSnapshot(patientId);
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new InformationNotFoundException("Appointment with id " + appointmentId + " not found"));
 
@@ -442,7 +436,7 @@ public class AppointmentService {
         appointment = appointmentRepository.saveAndFlush(appointment);
         waitlistService.offerNextWaiting(appointment.getDoctorId(), appointment.getAppointmentDate(), appointment.getStartTime());
         log.info("Appointment cancelled: appointmentId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                appointment.getId(), patient.getId(), appointment.getDoctorId(),
+                appointment.getId(), patient.patientId(), appointment.getDoctorId(),
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
         outboxService.append(EventTypes.BOOKING_APPOINTMENT_CANCELLED, "appointment", String.valueOf(appointment.getId()), OutboxService.payload(

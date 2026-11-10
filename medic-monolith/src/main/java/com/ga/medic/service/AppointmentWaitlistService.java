@@ -19,6 +19,9 @@ import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AppointmentWaitlistEntryMapper;
 import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
+import com.ga.medic.client.InternalIdentityClient;
+import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
+import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
 import com.ga.medic.model.*;
 import com.ga.medic.repository.*;
 import jakarta.persistence.EntityManager;
@@ -54,8 +57,7 @@ public class AppointmentWaitlistService {
     private static final Sort NEWEST_FIRST_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final AppointmentWaitlistEntryRepository waitlistRepository;
-    private final PatientProfileRepository patientProfileRepository;
-    private final DoctorProfileRepository doctorProfileRepository;
+    private final InternalIdentityClient internalIdentityClient;
     private final AppointmentRepository appointmentRepository;
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
@@ -77,42 +79,41 @@ public class AppointmentWaitlistService {
      */
     @Transactional
     public AppointmentWaitlistEntryResponse join(AppointmentWaitlistRequest request) {
-        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
+        InternalPatientSnapshotResponse patient = lockPatient(authenticatedUser.requirePatientId());
 
-        DoctorProfile doctor = doctorProfileRepository.findById(request.doctorId())
-                .orElseThrow(() -> new InformationNotFoundException("Doctor with id " + request.doctorId() + " not found"));
+        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(request.doctorId());
         if (!LocalDateTime.of(request.date(), request.startTime()).isAfter(LocalDateTime.now())) {
             throw new IllegalArgumentException("Requested waitlist slot must be in the future");
         }
 
-        slotLockService.acquire(doctor.getId(), request.date(), request.startTime());
-        AvailableSlotResponse slot = findSlot(doctor.getId(), request.date(), request.startTime(), null);
+        slotLockService.acquire(doctor.doctorId(), request.date(), request.startTime());
+        AvailableSlotResponse slot = findSlot(doctor.doctorId(), request.date(), request.startTime(), null);
         if (slot == null) {
             log.warn("Waitlist join rejected for invalid slot: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new SlotNotAvailableException("The requested time is outside the doctor's current schedule or is no longer a valid future slot");
         }
         if (slot.status() == AvailableSlotStatusEnum.AVAILABLE) {
             log.info("Waitlist join rejected because normal booking is available: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new WaitlistOfferConflictException("This slot is available to book normally; no waitlist entry was created");
         }
-        if (appointmentRepository.existsOverlappingForPatient(patient.getId(), request.date(), slot.startTime(), slot.endTime())) {
+        if (appointmentRepository.existsOverlappingForPatient(patient.patientId(), request.date(), slot.startTime(), slot.endTime())) {
             log.info("Waitlist join rejected due to patient overlap: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new SlotNotAvailableException("You already have an overlapping appointment at this time");
         }
         if (waitlistRepository.existsByPatientIdAndDoctorIdAndAppointmentDateAndPreferredStartTimeAndStatusIn(
-                patient.getId(), doctor.getId(), request.date(), request.startTime(), ACTIVE_ENTRY_STATUSES)) {
+                patient.patientId(), doctor.doctorId(), request.date(), request.startTime(), ACTIVE_ENTRY_STATUSES)) {
             log.info("Duplicate waitlist join rejected: patientId={}, doctorId={}, date={}, startTime={}",
-                    patient.getId(), doctor.getId(), request.date(), request.startTime());
+                    patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
             throw new WaitlistOfferConflictException("You already have an active waitlist entry for this slot");
         }
 
         AppointmentWaitlistEntry entry = waitlistEntryMapper.toEntity(request, doctor, patient);
         entry = waitlistRepository.saveAndFlush(entry);
         log.info("Patient joined appointment waitlist: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}",
-                entry.getId(), patient.getId(), doctor.getId(), request.date(), request.startTime());
+                entry.getId(), patient.patientId(), doctor.doctorId(), request.date(), request.startTime());
 
         outboxService.append(EventTypes.BOOKING_WAITLIST_JOINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
                         outboxPayloadMapper.bookingParties(patient, doctor),
@@ -165,7 +166,7 @@ public class AppointmentWaitlistService {
     @Transactional
     public void withdraw(Long entryId) {
         AppointmentWaitlistEntry entry = getEntry(entryId);
-        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
+        InternalPatientSnapshotResponse patient = lockPatient(authenticatedUser.requirePatientId());
         assertOwner(entry, patient);
 
         slotLockService.acquire(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
@@ -174,7 +175,7 @@ public class AppointmentWaitlistService {
         if (entry.getStatus() == WaitlistStatusEnum.WAITING) {
             entry.setStatus(WaitlistStatusEnum.CANCELLED);
             waitlistRepository.save(entry);
-            log.info("Patient withdrew from appointment waitlist: waitlistEntryId={}, patientId={}", entryId, patient.getId());
+            log.info("Patient withdrew from appointment waitlist: waitlistEntryId={}, patientId={}", entryId, patient.patientId());
             outboxService.append(EventTypes.BOOKING_WAITLIST_DECLINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
                             outboxPayloadMapper.bookingParties(entry),
                             "waitlistEntryId", entry.getId(),
@@ -190,7 +191,7 @@ public class AppointmentWaitlistService {
             entry.setStatus(nextStatus);
             waitlistRepository.saveAndFlush(entry);
             log.info("Patient released appointment waitlist offer: waitlistEntryId={}, patientId={}, doctorId={}, date={}, startTime={}, expired={}",
-                    entry.getId(), patient.getId(), entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), expired);
+                    entry.getId(), patient.patientId(), entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime(), expired);
             outboxService.append(expired ? EventTypes.BOOKING_WAITLIST_EXPIRED : EventTypes.BOOKING_WAITLIST_DECLINED, "waitlistEntry", String.valueOf(entry.getId()), OutboxService.payload(
                             outboxPayloadMapper.bookingParties(entry),
                             "waitlistEntryId", entry.getId(),
@@ -214,7 +215,7 @@ public class AppointmentWaitlistService {
     @Transactional(noRollbackFor = WaitlistOfferConflictException.class)
     public AppointmentResponse accept(Long entryId) {
         AppointmentWaitlistEntry entry = getEntry(entryId);
-        PatientProfile patient = lockPatient(authenticatedUser.requirePatientId());
+        InternalPatientSnapshotResponse patient = lockPatient(authenticatedUser.requirePatientId());
         assertOwner(entry, patient);
         slotLockService.acquire(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
         entityManager.refresh(entry);
@@ -222,7 +223,7 @@ public class AppointmentWaitlistService {
 
         if (entry.getStatus() != WaitlistStatusEnum.OFFERED) {
             log.warn("Waitlist acceptance rejected because entry is not offered: waitlistEntryId={}, patientId={}, status={}",
-                    entryId, patient.getId(), entry.getStatus());
+                    entryId, patient.patientId(), entry.getStatus());
             throw new WaitlistOfferConflictException("This waitlist offer is no longer active");
         }
 
@@ -231,7 +232,7 @@ public class AppointmentWaitlistService {
         if (entry.getOfferExpiresAt() == null || !entry.getOfferExpiresAt().isAfter(now)) {
             entry.setStatus(WaitlistStatusEnum.EXPIRED);
             waitlistRepository.saveAndFlush(entry);
-            log.info("Appointment waitlist offer expired during acceptance: waitlistEntryId={}, patientId={}", entryId, patient.getId());
+            log.info("Appointment waitlist offer expired during acceptance: waitlistEntryId={}, patientId={}", entryId, patient.patientId());
             offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             throw new WaitlistOfferConflictException("This waitlist offer has expired");
         }
@@ -245,17 +246,16 @@ public class AppointmentWaitlistService {
             throw new WaitlistOfferConflictException("The offered appointment slot is no longer available");
         }
 
-        if (appointmentRepository.existsOverlappingForPatient(patient.getId(), entry.getAppointmentDate(), slot.startTime(), slot.endTime())) {
+        if (appointmentRepository.existsOverlappingForPatient(patient.patientId(), entry.getAppointmentDate(), slot.startTime(), slot.endTime())) {
             entry.setStatus(WaitlistStatusEnum.CANCELLED);
             waitlistRepository.saveAndFlush(entry);
             log.info("Waitlist offer released because the patient now has an overlapping appointment: waitlistEntryId={}, patientId={}",
-                    entryId, patient.getId());
+                    entryId, patient.patientId());
             offerNextWaiting(entry.getDoctorId(), entry.getAppointmentDate(), entry.getPreferredStartTime());
             throw new WaitlistOfferConflictException("You now have an overlapping appointment and can no longer accept this offer");
         }
 
-        DoctorProfile doctor = doctorProfileRepository.findById(entry.getDoctorId())
-                .orElseThrow(() -> new InformationNotFoundException("Doctor with id " + entry.getDoctorId() + " not found"));
+        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(entry.getDoctorId());
         AvailabilityRule rule = availabilityRuleRepository.findById(slot.ruleId())
                 .orElseThrow(() -> new InformationNotFoundException("Availability rule with id " + slot.ruleId() + " not found"));
         AppointmentBookingRequest booking = new AppointmentBookingRequest(
@@ -283,7 +283,7 @@ public class AppointmentWaitlistService {
                 )
         );
         log.info("Appointment waitlist offer accepted: waitlistEntryId={}, appointmentId={}, patientId={}, doctorId={}",
-                entry.getId(), appointment.getId(), patient.getId(), entry.getDoctorId());
+                entry.getId(), appointment.getId(), patient.patientId(), entry.getDoctorId());
         return appointmentMapper.toResponse(appointment);
     }
 
@@ -422,10 +422,9 @@ public class AppointmentWaitlistService {
      * @param patientId the patient profile ID
      * @return the locked patient profile
      */
-    private PatientProfile lockPatient(Long patientId) {
+    private InternalPatientSnapshotResponse lockPatient(Long patientId) {
         slotLockService.acquirePatient(patientId);
-        return patientProfileRepository.findById(patientId)
-                .orElseThrow(() -> new InformationNotFoundException("Patient profile not found"));
+        return internalIdentityClient.getPatientSnapshot(patientId);
     }
 
     /**
@@ -446,8 +445,8 @@ public class AppointmentWaitlistService {
      * @param patient the authenticated patient's profile
      * @throws ForbiddenActionException if the patient does not own the entry
      */
-    private void assertOwner(AppointmentWaitlistEntry entry, PatientProfile patient) {
-        if (!Objects.equals(entry.getPatientId(), patient.getId())) {
+    private void assertOwner(AppointmentWaitlistEntry entry, InternalPatientSnapshotResponse patient) {
+        if (!Objects.equals(entry.getPatientId(), patient.patientId())) {
             throw new ForbiddenActionException("You can only manage your own waitlist entries");
         }
     }

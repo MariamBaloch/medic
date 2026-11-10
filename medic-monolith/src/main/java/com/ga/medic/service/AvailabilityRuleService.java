@@ -2,7 +2,6 @@ package com.ga.medic.service;
 
 import com.ga.medic.dto.request.AvailabilityRuleRequest;
 import com.ga.medic.dto.response.*;
-import com.ga.medic.common.event.EventTypes;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.enums.AvailableSlotStatusEnum;
 import com.ga.medic.enums.WaitlistStatusEnum;
@@ -15,7 +14,7 @@ import com.ga.medic.model.*;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AppointmentWaitlistEntryRepository;
 import com.ga.medic.repository.AvailabilityRuleRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
+import com.ga.medic.client.InternalIdentityClient;
 import com.ga.medic.common.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -42,7 +41,7 @@ public class AvailabilityRuleService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentWaitlistEntryRepository waitlistEntryRepository;
     private final AppointmentMapper appointmentMapper;
-    private final DoctorProfileRepository doctorProfileRepository;
+    private final InternalIdentityClient internalIdentityClient;
     private final DoctorWeeklyScheduleCacheService weeklyScheduleCacheService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -66,13 +65,13 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public AvailabilityRuleUpdateResponse createRule(AvailabilityRuleRequest request) {
-        DoctorProfile doctor = requireDoctorProfile();
-        checkRuleOverlap(doctor.getId(), request, -1L);
+        Long doctorId = authenticatedUser.requireDoctorId();
+        checkRuleOverlap(doctorId, request, -1L);
 
         AvailabilityRule rule = ruleMapper.toEntity(request);
-        rule.setDoctorId(doctor.getId());
+        rule.setDoctorId(doctorId);
         rule = ruleRepository.save(rule);
-        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+        publishScheduleChanged(doctorId);
         return new AvailabilityRuleUpdateResponse(ruleMapper.toResponse(rule), null, null);
     }
 
@@ -114,7 +113,7 @@ public class AvailabilityRuleService {
             hardDeleted = false;
         }
 
-        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+        publishScheduleChanged(doctorId);
 
         List<AppointmentResponse> affectedAppointmentResponses = appointmentMapper.toResponseList(affectedAppointments);
         return new AvailabilityRuleDeleteResponse(hardDeleted, affectedAppointmentResponses, message);
@@ -129,8 +128,8 @@ public class AvailabilityRuleService {
      */
     @Transactional
     public AvailabilityRuleUpdateResponse updateRule(Long ruleId, AvailabilityRuleRequest request) {
-        DoctorProfile doctor = requireDoctorProfile();
-        AvailabilityRule existing = ruleRepository.findByIdAndDoctorId(ruleId, doctor.getId())
+        Long doctorId = authenticatedUser.requireDoctorId();
+        AvailabilityRule existing = ruleRepository.findByIdAndDoctorId(ruleId, doctorId)
                 .orElseThrow(() -> new InformationNotFoundException("Availability rule not found"));
 
         LocalDate today = LocalDate.now();
@@ -142,7 +141,7 @@ public class AvailabilityRuleService {
         List<Appointment> affectedAppointments;
 
         if (existing.getStartDate().isAfter(today)) {
-            checkRuleOverlap(doctor.getId(), request, existing.getId());
+            checkRuleOverlap(doctorId, request, existing.getId());
             ruleMapper.updateRuleFromRequest(request, existing);
             existing = ruleRepository.save(existing);
 
@@ -153,10 +152,10 @@ public class AvailabilityRuleService {
             existing.setEndDate(newStartDate.minusDays(1));
             ruleRepository.save(existing);
 
-            checkRuleOverlap(doctor.getId(), request, existing.getId());
+            checkRuleOverlap(doctorId, request, existing.getId());
 
             AvailabilityRule newRule = ruleMapper.toEntity(request);
-            newRule.setDoctorId(doctor.getId());
+            newRule.setDoctorId(doctorId);
 
             newRule = ruleRepository.save(newRule);
             existing = newRule;
@@ -164,7 +163,7 @@ public class AvailabilityRuleService {
             affectedAppointments = findAppointmentsOutsideRule(ruleId, newRule);
         }
 
-        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+        publishScheduleChanged(doctorId);
 
         List<AppointmentResponse> affectedAppointmentResponseList = affectedAppointments.isEmpty() ? null : appointmentMapper.toResponseList(affectedAppointments);
         String message = (affectedAppointmentResponseList != null) ? affectedAppointmentResponseList.size() + " existing appointment(s) outside the new schedule were kept" : null;
@@ -209,9 +208,7 @@ public class AvailabilityRuleService {
     @Transactional
     public List<AvailableSlotResponse> getAvailability(Long doctorId, LocalDate from, LocalDate to,
                                                        Long excludedAppointmentId) {
-        if (!doctorProfileRepository.existsById(doctorId)) {
-            throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
-        }
+        internalIdentityClient.getDoctorSnapshot(doctorId);
         return computeAvailableSlots(doctorId, from, to, excludedAppointmentId, null).slots();
     }
 
@@ -220,9 +217,7 @@ public class AvailabilityRuleService {
      */
     @Transactional(readOnly = true)
     public DoctorAvailabilityResponse getAvailabilityForPatient(Long doctorId, LocalDate from, LocalDate to) {
-        if (!doctorProfileRepository.existsById(doctorId)) {
-            throw new InformationNotFoundException("Doctor with id " + doctorId + " does not exist.");
-        }
+        internalIdentityClient.getDoctorSnapshot(doctorId);
         Long patientId = authenticatedUser.requirePatientId();
         ComputedAvailability availability = computeAvailableSlots(doctorId, from, to, null, patientId);
         List<PatientAppointmentCalendarResponse> patientAppointments = availability.patientAppointments().stream()
@@ -244,11 +239,6 @@ public class AvailabilityRuleService {
         List<AvailableSlotResponse> slots = computeAvailableSlots(doctorId, date, date, null, null).slots().stream()
                 .filter(slot -> slot.status() == AvailableSlotStatusEnum.AVAILABLE).toList();
         return new DoctorDailyAvailabilityResponse(doctorId, date, mergeAdjacentSlots(slots));
-    }
-
-    private DoctorProfile requireDoctorProfile() {
-        return doctorProfileRepository.findById(authenticatedUser.requireDoctorId())
-                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
     }
 
     private List<AvailableTimeRangeResponse> mergeAdjacentSlots(List<AvailableSlotResponse> slots) {
@@ -425,6 +415,15 @@ public class AvailabilityRuleService {
 
         slots.sort(Comparator.comparing(AvailableSlotResponse::date).thenComparing(AvailableSlotResponse::startTime));
         return new ComputedAvailability(slots, patientAppointments);
+    }
+
+    /**
+     * Publishes an in-process schedule-change event so the doctor's week-slot cache is invalidated.
+     *
+     * @param doctorId the doctor's profile ID whose schedule changed
+     */
+    private void publishScheduleChanged(Long doctorId) {
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctorId));
     }
 
     private record ComputedAvailability(List<AvailableSlotResponse> slots, List<Appointment> patientAppointments) {

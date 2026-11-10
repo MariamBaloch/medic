@@ -1,6 +1,5 @@
 package com.ga.medic.service;
 
-import com.ga.medic.common.event.EventTypes;
 import com.ga.medic.common.security.AuthenticatedUser;
 import com.ga.medic.dto.request.AvailabilityExceptionRequest;
 import com.ga.medic.dto.response.AvailabilityExceptionDeleteResponse;
@@ -11,10 +10,8 @@ import com.ga.medic.exception.InformationNotFoundException;
 import com.ga.medic.mapper.AvailabilityExceptionMapper;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityException;
-import com.ga.medic.model.DoctorProfile;
 import com.ga.medic.repository.AppointmentRepository;
 import com.ga.medic.repository.AvailabilityExceptionRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -30,7 +27,6 @@ public class AvailabilityExceptionService {
     private final AvailabilityExceptionRepository exceptionRepository;
     private final AvailabilityExceptionMapper exceptionMapper;
     private final AppointmentRepository appointmentRepository;
-    private final DoctorProfileRepository doctorProfileRepository;
     private final AuthenticatedUser authenticatedUser;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -54,13 +50,12 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public AvailabilityExceptionResponse createException(AvailabilityExceptionRequest request) {
-        DoctorProfile doctor = requireDoctorProfile();
-
-        checkExceptionOverlap(doctor.getId(), request, -1L);
+        Long doctorId = authenticatedUser.requireDoctorId();
+        checkExceptionOverlap(doctorId, request, -1L);
 
         AvailabilityException exception = exceptionMapper.toEntity(request);
-        exception.setDoctorId(doctor.getId());
-        return getAvailabilityExceptionResponse(request, doctor, exception);
+        exception.setDoctorId(doctorId);
+        return getAvailabilityExceptionResponse(request, doctorId, exception);
     }
 
     /**
@@ -72,37 +67,44 @@ public class AvailabilityExceptionService {
      */
     @Transactional
     public AvailabilityExceptionResponse updateException(Long exceptionId, AvailabilityExceptionRequest request) {
-        DoctorProfile doctor = requireDoctorProfile();
+        Long doctorId = authenticatedUser.requireDoctorId();
 
-        AvailabilityException existing = exceptionRepository.findByIdAndDoctorId(exceptionId, doctor.getId()).orElseThrow(() -> new InformationNotFoundException("Availability exception not found"));
+        AvailabilityException existing = exceptionRepository.findByIdAndDoctorId(exceptionId, doctorId)
+                .orElseThrow(() -> new InformationNotFoundException("Availability exception not found"));
 
-        checkExceptionOverlap(doctor.getId(), request, existing.getId());
+        checkExceptionOverlap(doctorId, request, existing.getId());
 
         exceptionMapper.updateExceptionFromRequest(request, existing);
-        return getAvailabilityExceptionResponse(request, doctor, existing);
+        return getAvailabilityExceptionResponse(request, doctorId, existing);
     }
 
     /**
      * Saves an exception and builds a response that includes appointments affected by it.
      *
-     * @param request  the date and optional time window of the exception
-     * @param doctor   the doctor who owns the exception
-     * @param existing the new or updated exception to save
+     * @param request   the date and optional time window of the exception
+     * @param doctorId  the doctor's profile ID who owns the exception
+     * @param existing  the new or updated exception to save
      * @return the saved exception response and affected appointment details
      */
-    private AvailabilityExceptionResponse getAvailabilityExceptionResponse(AvailabilityExceptionRequest request, DoctorProfile doctor, AvailabilityException existing) {
+    private AvailabilityExceptionResponse getAvailabilityExceptionResponse(
+            AvailabilityExceptionRequest request,
+            Long doctorId,
+            AvailabilityException existing
+    ) {
         existing = exceptionRepository.save(existing);
-        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+        publishScheduleChanged(doctorId);
 
         List<Appointment> affectedAppointments;
         if (request.startTime() == null) {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(doctor.getId(), request.exceptionDate());
+            affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(doctorId, request.exceptionDate());
         } else {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDateAndTimeRange(doctor.getId(), request.exceptionDate(), request.startTime(), request.endTime());
+            affectedAppointments = appointmentRepository.findActiveByDoctorAndDateAndTimeRange(
+                    doctorId, request.exceptionDate(), request.startTime(), request.endTime());
         }
 
-        String message = affectedAppointments.isEmpty() ? null : affectedAppointments.size() + " existing appointment(s) are affected by this exception but were kept";
-
+        String message = affectedAppointments.isEmpty()
+                ? null
+                : affectedAppointments.size() + " existing appointment(s) fall within this exception";
         return exceptionMapper.toResponse(existing, affectedAppointments, message);
     }
 
@@ -119,24 +121,17 @@ public class AvailabilityExceptionService {
         AvailabilityException exception = exceptionRepository.findByIdAndDoctorId(exceptionId, doctorId)
                 .orElseThrow(() -> new InformationNotFoundException("Availability exception not found"));
 
-        List<Appointment> affectedAppointments;
-        if (exception.getStartTime() == null) {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(doctorId, exception.getExceptionDate());
-        } else {
-            affectedAppointments = appointmentRepository.findActiveByDoctorAndDateAndTimeRange(doctorId, exception.getExceptionDate(), exception.getStartTime(), exception.getEndTime());
-        }
+        List<Appointment> affectedAppointments = appointmentRepository.findActiveByDoctorAndDate(
+                doctorId, exception.getExceptionDate());
 
         exceptionRepository.delete(exception);
-        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctor.getId()));
+        publishScheduleChanged(doctorId);
 
-        String message = affectedAppointments.isEmpty() ? null : affectedAppointments.size() + " existing appointment(s) are affected by the deleted exception but were kept";
+        String message = affectedAppointments.isEmpty()
+                ? null
+                : affectedAppointments.size() + " existing appointment(s) are affected by the deleted exception but were kept";
 
         return exceptionMapper.toDeleteResponse(affectedAppointments, message);
-    }
-
-    private DoctorProfile requireDoctorProfile() {
-        return doctorProfileRepository.findById(authenticatedUser.requireDoctorId())
-                .orElseThrow(() -> new InformationNotFoundException("Doctor profile not found"));
     }
 
     /**
@@ -147,16 +142,28 @@ public class AvailabilityExceptionService {
      * @param excludeId the existing exception ID to ignore, or null when creating an exception
      */
     private void checkExceptionOverlap(Long doctorId, AvailabilityExceptionRequest request, Long excludeId) {
-        List<AvailabilityException> existing = exceptionRepository.findByDoctorAndDateExcluding(doctorId, request.exceptionDate(), excludeId != null ? excludeId : -1L);
+        List<AvailabilityException> existing = exceptionRepository.findByDoctorAndDateExcluding(
+                doctorId, request.exceptionDate(), excludeId != null ? excludeId : -1L);
 
         for (AvailabilityException exception : existing) {
             if (request.startTime() == null || exception.getStartTime() == null) {
-                throw new InformationExistsException("This exception overlaps with an existing exception (ID " + exception.getId() + ") on " + exception.getExceptionDate());
+                throw new InformationExistsException("This exception overlaps with an existing exception (ID "
+                        + exception.getId() + ") on " + exception.getExceptionDate());
             }
 
             if (request.startTime().isBefore(exception.getEndTime()) && request.endTime().isAfter(exception.getStartTime())) {
-                throw new InformationExistsException("This exception overlaps with an existing exception (ID " + exception.getId() + ") between " + exception.getStartTime() + " and " + exception.getEndTime());
+                throw new InformationExistsException("This exception overlaps with an existing exception (ID "
+                        + exception.getId() + ") between " + exception.getStartTime() + " and " + exception.getEndTime());
             }
         }
+    }
+
+    /**
+     * Publishes an in-process schedule-change event so the doctor's week-slot cache is invalidated.
+     *
+     * @param doctorId the doctor's profile ID whose schedule changed
+     */
+    private void publishScheduleChanged(Long doctorId) {
+        eventPublisher.publishEvent(new DoctorScheduleChangedEvent(doctorId));
     }
 }
