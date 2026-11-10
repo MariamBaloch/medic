@@ -14,8 +14,6 @@ public final class EventTypes {
     public static final String IDENTITY_DOCTOR_VERIFIED = "identity.doctor.verified";
     public static final String IDENTITY_DOCTOR_DEACTIVATED = "identity.doctor.deactivated";
 
-    public static final String BOOKING_DOCTOR_SCHEDULE_CHANGED = "booking.doctor-schedule.changed";
-
     public static final String BOOKING_APPOINTMENT_CREATED = "booking.appointment.created";
     public static final String BOOKING_APPOINTMENT_RESCHEDULED = "booking.appointment.rescheduled";
     public static final String BOOKING_APPOINTMENT_CANCELLED = "booking.appointment.cancelled";
