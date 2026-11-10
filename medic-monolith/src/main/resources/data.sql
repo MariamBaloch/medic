@@ -1,290 +1,130 @@
--- Seed Roles
-INSERT INTO roles (name, created_at, updated_at) VALUES
-('ADMIN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('DOCTOR', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('PATIENT', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO availability_rule (doctor_id, start_date, end_date, start_time, end_time, slot_minutes, created_at,
+                               updated_at)
+SELECT 1,
+       CURRENT_DATE,
+       CURRENT_DATE + INTERVAL '1 year',
+       '10:00:00',
+       '14:00:00',
+       30,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM availability_rule ar WHERE ar.doctor_id = 1);
 
--- Seed Specializations
-INSERT INTO specializations (name, description, created_at, updated_at) VALUES
-('Cardiology', 'Heart and blood vessels', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('Dermatology', 'Skin conditions', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('Pediatrics', 'Children and infants', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('Neurology', 'Nervous system', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('Orthopedics', 'Bones and muscles', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT (name) DO NOTHING;
-
--- Seed Users
--- Admin
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'admin@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'System', 'Admin', '1980-01-01', '1234567890', 'MALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'ADMIN'
-ON CONFLICT (email) DO NOTHING;
-
--- Doctor 1
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'doctor1@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'Sarah', 'Smith', '1985-05-15', '9876543211', 'FEMALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'DOCTOR'
-ON CONFLICT (email) DO NOTHING;
-
--- Doctor 2
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'doctor2@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'Robert', 'Brown', '1978-08-22', '9876543212', 'MALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'DOCTOR'
-ON CONFLICT (email) DO NOTHING;
-
--- Patient 1
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'patient1@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'John', 'Doe', '1990-10-20', '5551234561', 'MALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'PATIENT'
-ON CONFLICT (email) DO NOTHING;
-
--- Patient 2
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'patient2@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'Jane', 'Clark', '1992-12-10', '5551234562', 'FEMALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'PATIENT'
-ON CONFLICT (email) DO NOTHING;
-
--- Patient 3
-INSERT INTO users (role_id, email, password, first_name, last_name, date_of_birth, phone, gender, status, created_at, updated_at)
-SELECT id, 'patient3@medic.com', '$2a$10$7Dasjt9P2q.4nWy3VLPjYed2xO/BcO6npvpNeUmt0gCT8dao2/HQq', 'Alex', 'Morgan', '1995-03-15', '5551234563', 'MALE', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM roles WHERE name = 'PATIENT'
-ON CONFLICT (email) DO NOTHING;
-
--- Seed Doctor Profiles
-INSERT INTO doctor_profiles (user_id, specialization_id, license_number, qualification, years_of_experience, consultation_fee, hospital_affiliation, bio, is_verified, created_at, updated_at)
-SELECT u.id, s.id, 'MD10001', 'MBBS, MD', 10, 150.00, 'City Hospital', 'Experienced cardiologist.', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users u, specializations s
-WHERE u.email = 'doctor1@medic.com' AND s.name = 'Cardiology'
-ON CONFLICT (user_id) DO NOTHING;
-
-INSERT INTO doctor_profiles (user_id, specialization_id, license_number, qualification, years_of_experience, consultation_fee, hospital_affiliation, bio, is_verified, created_at, updated_at)
-SELECT u.id, s.id, 'MD10002', 'MBBS, DO', 15, 200.00, 'General Hospital', 'Expert in neurology.', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users u, specializations s
-WHERE u.email = 'doctor2@medic.com' AND s.name = 'Neurology'
-ON CONFLICT (user_id) DO NOTHING;
-
--- Seed Patient Profiles
-INSERT INTO patient_profile (user_id, address, city, country, blood_type, height_cm, weight_kg, allergies, chronic_conditions, created_at, updated_at)
-SELECT u.id, '123 Main St', 'Metropolis', 'Countryland', 'O_POSITIVE', 180, 75, 'Peanuts', 'None', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users u WHERE u.email = 'patient1@medic.com'
-ON CONFLICT (user_id) DO NOTHING;
-
-INSERT INTO patient_profile (user_id, address, city, country, blood_type, height_cm, weight_kg, allergies, chronic_conditions, created_at, updated_at)
-SELECT u.id, '456 Elm St', 'Gotham', 'Countryland', 'A_NEGATIVE', 165, 60, 'Dust', 'Asthma', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users u WHERE u.email = 'patient2@medic.com'
-ON CONFLICT (user_id) DO NOTHING;
-
-INSERT INTO patient_profile (user_id, address, city, country, blood_type, height_cm, weight_kg, allergies, chronic_conditions, created_at, updated_at)
-SELECT u.id, '789 Oak St', 'Star City', 'Countryland', 'B_POSITIVE', 172, 68, 'None', 'None', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM users u WHERE u.email = 'patient3@medic.com'
-ON CONFLICT (user_id) DO NOTHING;
-
--- Seed Availability Rules
--- Doctor 1: Weekdays 10-2
-INSERT INTO availability_rule (doctor_id, start_date, end_date, start_time, end_time, slot_minutes, created_at, updated_at)
-SELECT dp.id, CURRENT_DATE, CURRENT_DATE + INTERVAL '1 year', '10:00:00', '14:00:00', 30, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'doctor1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_rule ar WHERE ar.doctor_id = dp.id);
-
--- Doctor 2: Weekdays 10-2
-INSERT INTO availability_rule (doctor_id, start_date, end_date, start_time, end_time, slot_minutes, created_at, updated_at)
-SELECT dp.id, CURRENT_DATE, CURRENT_DATE + INTERVAL '6 months', '10:00:00', '14:00:00', 30, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'doctor2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_rule ar WHERE ar.doctor_id = dp.id);
-
--- Seed Availability Days
-INSERT INTO availability_rule_days (rule_id, days_of_week)
-SELECT ar.id, day FROM availability_rule ar JOIN doctor_profiles dp ON dp.id = ar.doctor_id JOIN users u ON u.id = dp.user_id
-CROSS JOIN (VALUES ('MONDAY'), ('TUESDAY'), ('WEDNESDAY'), ('THURSDAY'), ('FRIDAY')) AS v(day)
-WHERE u.email = 'doctor1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_rule_days ard WHERE ard.rule_id = ar.id AND ard.days_of_week = v.day);
+INSERT INTO availability_rule (doctor_id, start_date, end_date, start_time, end_time, slot_minutes, created_at,
+                               updated_at)
+SELECT 2,
+       CURRENT_DATE,
+       CURRENT_DATE + INTERVAL '6 months',
+       '10:00:00',
+       '14:00:00',
+       30,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM availability_rule ar WHERE ar.doctor_id = 2);
 
 INSERT INTO availability_rule_days (rule_id, days_of_week)
-SELECT ar.id, day FROM availability_rule ar JOIN doctor_profiles dp ON dp.id = ar.doctor_id JOIN users u ON u.id = dp.user_id
-CROSS JOIN (VALUES ('MONDAY'), ('TUESDAY'), ('WEDNESDAY'), ('THURSDAY'), ('FRIDAY')) AS v(day)
-WHERE u.email = 'doctor2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_rule_days ard WHERE ard.rule_id = ar.id AND ard.days_of_week = v.day);
+SELECT ar.id, day
+FROM availability_rule ar
+         CROSS JOIN (VALUES ('MONDAY'), ('TUESDAY'), ('WEDNESDAY'), ('THURSDAY'), ('FRIDAY')) AS v(day)
+WHERE ar.doctor_id = 1
+  AND NOT EXISTS (SELECT 1 FROM availability_rule_days ard WHERE ard.rule_id = ar.id AND ard.days_of_week = v.day);
 
--- Seed Availability Exceptions
-INSERT INTO availability_exception (doctor_id, exception_date, start_time, end_time, reason, created_at, updated_at)
-SELECT dp.id, CURRENT_DATE + INTERVAL '10 days', '10:00:00', '14:00:00', 'Vacation', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'doctor1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = dp.id AND reason = 'Vacation');
-
-INSERT INTO availability_exception (doctor_id, exception_date, start_time, end_time, reason, created_at, updated_at)
-SELECT dp.id, CURRENT_DATE + INTERVAL '20 days', '10:00:00', '12:00:00', 'Conference', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'doctor1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = dp.id AND reason = 'Conference');
+INSERT INTO availability_rule_days (rule_id, days_of_week)
+SELECT ar.id, day
+FROM availability_rule ar
+         CROSS JOIN (VALUES ('MONDAY'), ('TUESDAY'), ('WEDNESDAY'), ('THURSDAY'), ('FRIDAY')) AS v(day)
+WHERE ar.doctor_id = 2
+  AND NOT EXISTS (SELECT 1 FROM availability_rule_days ard WHERE ard.rule_id = ar.id AND ard.days_of_week = v.day);
 
 INSERT INTO availability_exception (doctor_id, exception_date, start_time, end_time, reason, created_at, updated_at)
-SELECT dp.id, CURRENT_DATE + INTERVAL '5 days', '10:00:00', '14:00:00', 'Sick Leave', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users u ON u.id = dp.user_id WHERE u.email = 'doctor2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = dp.id AND reason = 'Sick Leave');
+SELECT 1, CURRENT_DATE + INTERVAL '10 days', '10:00:00', '14:00:00', 'Vacation', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = 1 AND ae.reason = 'Vacation');
 
--- Seed Appointments (Assume constraints on appointment_date and start_time to avoid unique constraint violation)
-INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, pu.id, du.id,
-       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
-       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
-       dp.specialization_id,
-       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '1 day', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'General Checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
-CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
-WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '1 day' AND a.start_time = '10:00:00');
+INSERT INTO availability_exception (doctor_id, exception_date, start_time, end_time, reason, created_at, updated_at)
+SELECT 1, CURRENT_DATE + INTERVAL '20 days', '10:00:00', '12:00:00', 'Conference', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = 1 AND ae.reason = 'Conference');
 
-INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, pu.id, du.id,
-       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
-       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
-       dp.specialization_id,
-       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + INTERVAL '2 days', '10:00:00', '10:30:00', dp.consultation_fee, 'BOOKED', 'Follow up', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
-CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
-WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '2 days' AND a.start_time = '10:00:00');
+INSERT INTO availability_exception (doctor_id, exception_date, start_time, end_time, reason, created_at, updated_at)
+SELECT 2, CURRENT_DATE + INTERVAL '5 days', '10:00:00', '14:00:00', 'Sick Leave', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM availability_exception ae WHERE ae.doctor_id = 2 AND ae.reason = 'Sick Leave');
 
-INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, pu.id, du.id,
-       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
-       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
-       dp.specialization_id,
-       (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '3 days', '10:00:00', '10:15:00', dp.consultation_fee, 'BOOKED', 'Headache', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
-CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
-WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient1@medic.com'
-AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '3 days' AND a.start_time = '10:00:00');
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
+                         doctor_name, doctor_email, doctor_specialization_id, availability_rule_id,
+                         appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT 1,
+       1,
+       4,
+       2,
+       'John Doe',
+       'patient1@medic.com',
+       'Sarah Smith',
+       'doctor1@medic.com',
+       1,
+       (SELECT id FROM availability_rule WHERE doctor_id = 1 LIMIT 1),
+       CURRENT_DATE + INTERVAL '1 day',
+       '10:00:00',
+       '10:30:00',
+       150.00,
+       'BOOKED',
+       'General Checkup',
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1
+                  FROM appointment a
+                  WHERE a.doctor_id = 1
+                    AND a.appointment_date = CURRENT_DATE + INTERVAL '1 day'
+                    AND a.start_time = '10:00:00');
 
-INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, pu.id, du.id,
-       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
-       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
-       dp.specialization_id,
-       (SELECT id FROM availability_rule WHERE doctor_id = dp.id AND start_time = '10:00:00' LIMIT 1), CURRENT_DATE + INTERVAL '4 days', '13:00:00', '13:30:00', dp.consultation_fee, 'BOOKED', 'Migraine', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
-CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
-WHERE du.email = 'doctor2@medic.com' AND pu.email = 'patient2@medic.com'
-AND NOT EXISTS (SELECT 1 FROM appointment a WHERE a.doctor_id = dp.id AND a.appointment_date = CURRENT_DATE + INTERVAL '4 days' AND a.start_time = '13:00:00');
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
+                         doctor_name, doctor_email, doctor_specialization_id, availability_rule_id,
+                         appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT 1,
+       2,
+       5,
+       2,
+       'Jane Clark',
+       'patient2@medic.com',
+       'Sarah Smith',
+       'doctor1@medic.com',
+       1,
+       (SELECT id FROM availability_rule WHERE doctor_id = 1 LIMIT 1),
+       CURRENT_DATE + INTERVAL '2 days',
+       '10:00:00',
+       '10:30:00',
+       150.00,
+       'BOOKED',
+       'Follow up',
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1
+                  FROM appointment a
+                  WHERE a.doctor_id = 1
+                    AND a.appointment_date = CURRENT_DATE + INTERVAL '2 days'
+                    AND a.start_time = '10:00:00');
 
--- Seed past appointment history for Patient 1
-INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email, doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
-SELECT dp.id, pp.id, pu.id, du.id,
-       TRIM(BOTH FROM CONCAT(COALESCE(pu.first_name, ''), ' ', COALESCE(pu.last_name, ''))), pu.email,
-       TRIM(BOTH FROM CONCAT(COALESCE(du.first_name, ''), ' ', COALESCE(du.last_name, ''))), du.email,
-       dp.specialization_id,
-       (SELECT id FROM availability_rule WHERE doctor_id = dp.id LIMIT 1), CURRENT_DATE + v.day_offset, v.start_time, v.end_time, dp.consultation_fee, v.status, v.reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM doctor_profiles dp JOIN users du ON du.id = dp.user_id
-CROSS JOIN patient_profile pp JOIN users pu ON pu.id = pp.user_id
-CROSS JOIN (VALUES
-    (INTERVAL '-4 days', TIME '10:00:00', TIME '10:30:00', 'COMPLETED', 'General Checkup'),
-    (INTERVAL '-3 days', TIME '10:30:00', TIME '11:00:00', 'COMPLETED', 'Follow up'),
-    (INTERVAL '-2 days', TIME '11:00:00', TIME '11:30:00', 'NO_SHOW', 'Consultation'),
-    (INTERVAL '-1 day', TIME '11:30:00', TIME '12:00:00', 'CANCELLED', 'Review')
-) AS v(day_offset, start_time, end_time, status, reason)
-WHERE du.email = 'doctor1@medic.com' AND pu.email = 'patient1@medic.com'
-AND NOT EXISTS (
-    SELECT 1 FROM appointment a
-    WHERE a.doctor_id = dp.id AND a.patient_id = pp.id
-      AND a.appointment_date = CURRENT_DATE + v.day_offset AND a.start_time = v.start_time
-);
-
--- Ensure each seeded patient has at least three past completed appointments.
--- Existing completed history is counted first so rerunning this seed does not add duplicates.
-WITH completed_counts AS (
-    SELECT appointment.patient_id, COUNT(*) AS completed_count
-    FROM appointment
-    JOIN patient_profile ON patient_profile.id = appointment.patient_id
-    JOIN users patient_user ON patient_user.id = patient_profile.user_id
-    WHERE patient_user.email IN ('patient1@medic.com', 'patient2@medic.com', 'patient3@medic.com')
-      AND appointment.status = 'COMPLETED'
-      AND appointment.appointment_date < CURRENT_DATE
-    GROUP BY appointment.patient_id
-),
-seed_patients AS (
-    SELECT patient_profile.id AS patient_id, COALESCE(completed_counts.completed_count, 0) AS completed_count
-    FROM patient_profile
-    JOIN users patient_user ON patient_user.id = patient_profile.user_id
-    LEFT JOIN completed_counts ON completed_counts.patient_id = patient_profile.id
-    WHERE patient_user.email IN ('patient1@medic.com', 'patient2@medic.com', 'patient3@medic.com')
-),
-seed_doctor AS (
-    SELECT doctor_profiles.id AS doctor_id,
-           doctor_profiles.consultation_fee,
-           doctor_profiles.specialization_id,
-           doctor_user.id AS doctor_user_id,
-           TRIM(BOTH FROM CONCAT(COALESCE(doctor_user.first_name, ''), ' ', COALESCE(doctor_user.last_name, ''))) AS doctor_name,
-           doctor_user.email AS doctor_email,
-           (SELECT availability_rule.id
-            FROM availability_rule
-            WHERE availability_rule.doctor_id = doctor_profiles.id
-            ORDER BY availability_rule.id
-            LIMIT 1) AS availability_rule_id
-    FROM doctor_profiles
-    JOIN users doctor_user ON doctor_user.id = doctor_profiles.user_id
-    WHERE doctor_user.email = 'doctor1@medic.com'
-),
-seed_patient_details AS (
-    SELECT seed_patients.patient_id,
-           seed_patients.completed_count,
-           patient_user.id AS patient_user_id,
-           TRIM(BOTH FROM CONCAT(COALESCE(patient_user.first_name, ''), ' ', COALESCE(patient_user.last_name, ''))) AS patient_name,
-           patient_user.email AS patient_email
-    FROM seed_patients
-    JOIN patient_profile ON patient_profile.id = seed_patients.patient_id
-    JOIN users patient_user ON patient_user.id = patient_profile.user_id
-),
-candidate_slots AS (
-    SELECT seed_patient_details.patient_id,
-           seed_patient_details.patient_user_id,
-           seed_patient_details.patient_name,
-           seed_patient_details.patient_email,
-           seed_doctor.doctor_id,
-           seed_doctor.doctor_user_id,
-           seed_doctor.doctor_name,
-           seed_doctor.doctor_email,
-           seed_doctor.specialization_id AS doctor_specialization_id,
-           seed_doctor.availability_rule_id,
-           seed_doctor.consultation_fee,
-           CURRENT_DATE - (30 + CAST(seed_patient_details.patient_id AS INTEGER) * 10 + slot_number.candidate_number)
-               AS appointment_date,
-           TIME '10:00:00' AS start_time,
-           TIME '10:30:00' AS end_time,
-           slot_number.candidate_number,
-           seed_patient_details.completed_count
-    FROM seed_patient_details
-    CROSS JOIN (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10))
-        AS slot_number(candidate_number)
-    CROSS JOIN seed_doctor
-    WHERE seed_patient_details.completed_count < 3
-      AND seed_doctor.availability_rule_id IS NOT NULL
-),
-available_candidates AS (
-    SELECT candidate_slots.*
-    FROM candidate_slots
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM appointment
-        WHERE appointment.doctor_id = candidate_slots.doctor_id
-          AND appointment.appointment_date = candidate_slots.appointment_date
-          AND appointment.start_time = candidate_slots.start_time
-    )
-),
-ranked_candidates AS (
-    SELECT available_candidates.*,
-           ROW_NUMBER() OVER (
-               PARTITION BY available_candidates.patient_id
-               ORDER BY available_candidates.candidate_number
-           ) AS candidate_rank
-    FROM available_candidates
-)
-INSERT INTO appointment (
-    doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
-    doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time,
-    booking_fee, status, reason, created_at, updated_at
-)
-SELECT doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
-       doctor_name, doctor_email, doctor_specialization_id, availability_rule_id, appointment_date, start_time, end_time,
-       consultation_fee, 'COMPLETED', 'Historical checkup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM ranked_candidates
-WHERE candidate_rank <= 3 - completed_count;
+INSERT INTO appointment (doctor_id, patient_id, patient_user_id, doctor_user_id, patient_name, patient_email,
+                         doctor_name, doctor_email, doctor_specialization_id, availability_rule_id,
+                         appointment_date, start_time, end_time, booking_fee, status, reason, created_at, updated_at)
+SELECT 2,
+       1,
+       4,
+       3,
+       'John Doe',
+       'patient1@medic.com',
+       'Robert Brown',
+       'doctor2@medic.com',
+       4,
+       (SELECT id FROM availability_rule WHERE doctor_id = 2 LIMIT 1),
+       CURRENT_DATE + INTERVAL '3 days',
+       '10:00:00',
+       '10:15:00',
+       200.00,
+       'BOOKED',
+       'Headache',
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1
+                  FROM appointment a
+                  WHERE a.doctor_id = 2
+                    AND a.appointment_date = CURRENT_DATE + INTERVAL '3 days'
+                    AND a.start_time = '10:00:00');
