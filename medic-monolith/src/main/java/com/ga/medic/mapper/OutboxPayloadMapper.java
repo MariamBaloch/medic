@@ -1,31 +1,28 @@
 package com.ga.medic.mapper;
 
+import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
+import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
 import com.ga.medic.config.GlobalMapperConfig;
 import com.ga.medic.dto.event.BookingPartiesPayload;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AppointmentWaitlistEntry;
-import com.ga.medic.model.DoctorProfile;
-import com.ga.medic.model.PatientProfile;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 import java.util.Map;
 
-/**
- * Builds outbox payload  from booking snapshots or live profiles
- */
 @Mapper(config = GlobalMapperConfig.class)
 public interface OutboxPayloadMapper {
 
-    @Mapping(target = "patientId", source = "patient.id")
-    @Mapping(target = "doctorId", source = "doctor.id")
-    @Mapping(target = "patientUserId", source = "patient.user.id")
-    @Mapping(target = "doctorUserId", source = "doctor.user.id")
-    @Mapping(target = "patientName", source = "patient.user.fullName")
-    @Mapping(target = "patientEmail", source = "patient.user.email")
-    @Mapping(target = "doctorName", source = "doctor.user.fullName")
-    @Mapping(target = "doctorEmail", source = "doctor.user.email")
-    BookingPartiesPayload toBookingParties(PatientProfile patient, DoctorProfile doctor);
+    @Mapping(target = "patientId", source = "patient.patientId")
+    @Mapping(target = "doctorId", source = "doctor.doctorId")
+    @Mapping(target = "patientUserId", source = "patient.patientUserId")
+    @Mapping(target = "doctorUserId", source = "doctor.doctorUserId")
+    @Mapping(target = "patientName", source = "patient.patientName")
+    @Mapping(target = "patientEmail", source = "patient.patientEmail")
+    @Mapping(target = "doctorName", source = "doctor.doctorName")
+    @Mapping(target = "doctorEmail", source = "doctor.doctorEmail")
+    BookingPartiesPayload toBookingParties(InternalPatientSnapshotResponse patient, InternalDoctorSnapshotResponse doctor);
 
     @Mapping(target = "patientId", source = "patientId")
     @Mapping(target = "doctorId", source = "doctorId")
@@ -47,7 +44,7 @@ public interface OutboxPayloadMapper {
     @Mapping(target = "doctorEmail", source = "doctorEmail")
     BookingPartiesPayload toBookingParties(AppointmentWaitlistEntry entry);
 
-    default Map<String, Object> bookingParties(PatientProfile patient, DoctorProfile doctor) {
+    default Map<String, Object> bookingParties(InternalPatientSnapshotResponse patient, InternalDoctorSnapshotResponse doctor) {
         return toBookingParties(patient, doctor).asMap();
     }
 

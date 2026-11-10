@@ -1,5 +1,7 @@
 package com.ga.medic.model;
 
+import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
+import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -75,17 +77,18 @@ public class Appointment extends Auditable {
     @Column(name = "availability_rule_id")
     private Long availabilityRuleId;
 
-    public void applyPartySnapshots(PatientProfile patient, DoctorProfile doctor) {
-        this.patientId = patient.getId();
-        this.doctorId = doctor.getId();
-        this.patientUserId = patient.getUser().getId();
-        this.doctorUserId = doctor.getUser().getId();
-        this.patientName = patient.getUser().getFullName();
-        this.patientEmail = patient.getUser().getEmail();
-        this.doctorName = doctor.getUser().getFullName();
-        this.doctorEmail = doctor.getUser().getEmail();
-        this.doctorSpecializationId = doctor.getSpecialization() != null
-                ? doctor.getSpecialization().getId()
-                : null;
+    public void applyPartySnapshots(
+            InternalPatientSnapshotResponse patient,
+            InternalDoctorSnapshotResponse doctor
+    ) {
+        this.patientId = patient.patientId();
+        this.doctorId = doctor.doctorId();
+        this.patientUserId = patient.patientUserId();
+        this.doctorUserId = doctor.doctorUserId();
+        this.patientName = patient.patientName();
+        this.patientEmail = patient.patientEmail();
+        this.doctorName = doctor.doctorName();
+        this.doctorEmail = doctor.doctorEmail();
+        this.doctorSpecializationId = doctor.doctorSpecializationId();
     }
 }
