@@ -3,11 +3,8 @@ package com.ga.medic.integration.appointment;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.exception.GlobalExceptionHandler;
 import com.ga.medic.model.Appointment;
-import com.ga.medic.model.DoctorProfile;
-import com.ga.medic.model.PatientProfile;
 import com.ga.medic.repository.AppointmentRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
-import com.ga.medic.repository.PatientProfileRepository;
+import com.ga.medic.support.IdentityTestData;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,14 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ActiveProfiles("integration")
 class AppointmentConstraintIntegrationTest {
 
+    private static final long DOCTOR_ID = 1L;
+    private static final long PATIENT_ONE_ID = 1L;
+    private static final long PATIENT_TWO_ID = 2L;
+
     @Autowired
     private AppointmentRepository appointmentRepository;
-
-    @Autowired
-    private DoctorProfileRepository doctorProfileRepository;
-
-    @Autowired
-    private PatientProfileRepository patientProfileRepository;
 
     @Autowired
     private GlobalExceptionHandler exceptionHandler;
@@ -49,14 +44,12 @@ class AppointmentConstraintIntegrationTest {
     @Test
     @Transactional
     void activeSlotUniqueIndexViolationIsReturnedAsConflict() {
-        DoctorProfile doctor = doctorProfileRepository.findAll().stream().findFirst().orElseThrow();
-        PatientProfile patient = patientProfileRepository.findAll().stream().findFirst().orElseThrow();
         LocalDate date = LocalDate.now().plusYears(2);
         LocalTime startTime = LocalTime.of(8, 0);
 
-        appointmentRepository.saveAndFlush(createAppointment(doctor, patient, date, startTime));
+        appointmentRepository.saveAndFlush(createAppointment(PATIENT_ONE_ID, date, startTime));
         DataIntegrityViolationException exception = assertThrows(DataIntegrityViolationException.class,
-                () -> appointmentRepository.saveAndFlush(createAppointment(doctor, patient, date, startTime)));
+                () -> appointmentRepository.saveAndFlush(createAppointment(PATIENT_ONE_ID, date, startTime)));
 
         HttpServletRequest request = new MockHttpServletRequest("POST", "/patient/appointments");
         var response = exceptionHandler.handleDataIntegrityViolation(exception, request);
@@ -66,32 +59,35 @@ class AppointmentConstraintIntegrationTest {
 
     @Test
     void waitlistPartialIndexesAllowMultiplePatientsButRejectDuplicateActiveEntriesAndOffers() {
-        DoctorProfile doctor = doctorProfileRepository.findAll().stream().findFirst().orElseThrow();
-        List<PatientProfile> patients = patientProfileRepository.findAll();
-        assertTrue(patients.size() >= 2, "The integration seed must provide two patients");
+        List<Long> patientIds = List.of(PATIENT_ONE_ID, PATIENT_TWO_ID);
 
         LocalDate date = LocalDate.now().plusYears(5);
         LocalTime waitingTime = LocalTime.of(9, 0);
         LocalTime offeredTime = LocalTime.of(9, 30);
 
         try {
-            insertWaitlistEntry(patients.get(0).getId(), doctor.getId(), date, waitingTime, "WAITING");
-            insertWaitlistEntry(patients.get(1).getId(), doctor.getId(), date, waitingTime, "WAITING");
+            insertWaitlistEntry(patientIds.get(0), DOCTOR_ID, date, waitingTime, "WAITING");
+            insertWaitlistEntry(patientIds.get(1), DOCTOR_ID, date, waitingTime, "WAITING");
             assertThrows(DataIntegrityViolationException.class,
-                    () -> insertWaitlistEntry(patients.get(0).getId(), doctor.getId(), date, waitingTime, "OFFERED"),
+                    () -> insertWaitlistEntry(patientIds.get(0), DOCTOR_ID, date, waitingTime, "OFFERED"),
                     "A patient cannot have two active entries for the same slot");
 
-            insertWaitlistEntry(patients.get(0).getId(), doctor.getId(), date, offeredTime, "OFFERED");
+            insertWaitlistEntry(patientIds.get(0), DOCTOR_ID, date, offeredTime, "OFFERED");
             assertThrows(DataIntegrityViolationException.class,
-                    () -> insertWaitlistEntry(patients.get(1).getId(), doctor.getId(), date, offeredTime, "OFFERED"),
+                    () -> insertWaitlistEntry(patientIds.get(1), DOCTOR_ID, date, offeredTime, "OFFERED"),
                     "Only one patient can hold an active offer for a slot");
         } finally {
             jdbcTemplate.update("DELETE FROM appointment_waitlist_entry WHERE doctor_id = ? AND appointment_date = ?",
-                    doctor.getId(), date);
+                    DOCTOR_ID, date);
         }
     }
 
     private void insertWaitlistEntry(Long patientId, Long doctorId, LocalDate date, LocalTime startTime, String status) {
+        var patient = patientId.equals(PATIENT_ONE_ID)
+                ? IdentityTestData.seedPatientOne()
+                : IdentityTestData.seedPatientTwo();
+        var doctor = IdentityTestData.seedDoctorOne();
+
         jdbcTemplate.update("""
                 INSERT INTO appointment_waitlist_entry
                     (patient_id, doctor_id, patient_user_id, doctor_user_id,
@@ -100,14 +96,18 @@ class AppointmentConstraintIntegrationTest {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 patientId, doctorId,
-                9000L + patientId, 8000L + doctorId,
-                "Patient " + patientId, "patient" + patientId + "@test.local",
-                "Doctor " + doctorId, "doctor" + doctorId + "@test.local",
+                patient.patientUserId(), doctor.doctorUserId(),
+                patient.patientName(), patient.patientEmail(),
+                doctor.doctorName(), doctor.doctorEmail(),
                 date, startTime, status);
     }
 
-    private Appointment createAppointment(DoctorProfile doctor, PatientProfile patient,
-                                          LocalDate date, LocalTime startTime) {
+    private Appointment createAppointment(Long patientId, LocalDate date, LocalTime startTime) {
+        var patient = patientId.equals(PATIENT_ONE_ID)
+                ? IdentityTestData.seedPatientOne()
+                : IdentityTestData.seedPatientTwo();
+        var doctor = IdentityTestData.seedDoctorOne();
+
         Appointment appointment = new Appointment();
         appointment.applyPartySnapshots(patient, doctor);
         appointment.setAppointmentDate(date);

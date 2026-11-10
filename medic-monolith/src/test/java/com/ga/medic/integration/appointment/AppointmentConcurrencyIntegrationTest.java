@@ -1,17 +1,14 @@
 package com.ga.medic.integration.appointment;
 
+import com.ga.medic.client.InternalIdentityClient;
 import com.ga.medic.enums.AppointmentStatusEnum;
 import com.ga.medic.model.Appointment;
-import com.ga.medic.model.User;
 import com.ga.medic.repository.AppointmentRepository;
-import com.ga.medic.repository.DoctorProfileRepository;
-import com.ga.medic.repository.PatientProfileRepository;
-import com.ga.medic.repository.UserRepository;
-import com.ga.medic.security.JWTUtils;
 import com.ga.medic.service.AppointmentSlotLockService;
-import com.ga.medic.service.EmailService;
 import com.ga.medic.common.security.TokenBlacklistService;
 import com.ga.medic.common.security.TokenVersionService;
+import com.ga.medic.support.IdentityTestData;
+import com.ga.medic.support.TestJwtFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +40,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -50,21 +48,22 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("integration")
 class AppointmentConcurrencyIntegrationTest {
 
+    private static final long DOCTOR_ONE_ID = 1L;
+    private static final long DOCTOR_TWO_ID = 2L;
+    private static final long PATIENT_ONE_ID = 1L;
+    private static final long PATIENT_TWO_ID = 2L;
+    private static final int TOKEN_VERSION = 0;
+
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
+
     @Autowired
     private ObjectMapper objectMapper;
     @Autowired
     private Environment environment;
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private DoctorProfileRepository doctorProfileRepository;
-    @Autowired
-    private PatientProfileRepository patientProfileRepository;
     @Autowired
     private AppointmentRepository appointmentRepository;
     @Autowired
@@ -73,36 +72,34 @@ class AppointmentConcurrencyIntegrationTest {
     private AppointmentSlotLockService slotLockService;
     @Autowired
     private PlatformTransactionManager transactionManager;
-    @Autowired
-    private JWTUtils jwtUtils;
+
+    @MockitoBean
+    private InternalIdentityClient internalIdentityClient;
     @MockitoBean
     private TokenBlacklistService tokenBlacklistService;
     @MockitoBean
     private TokenVersionService tokenVersionService;
-    @MockitoBean
-    private EmailService emailService;
+
     private String patientOneToken;
     private String patientTwoToken;
-    private Long patientOneId;
     private Long doctorOneId;
     private Long doctorTwoId;
 
     @BeforeEach
     void setUp() {
         when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
-        when(tokenVersionService.matches(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt()))
+        when(tokenVersionService.matches(anyLong(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(true);
 
-        User patientOne = findSeedUser("patient1@medic.com");
-        User patientTwo = findSeedUser("patient2@medic.com");
-        User doctorOne = findSeedUser("doctor1@medic.com");
-        User doctorTwo = findSeedUser("doctor2@medic.com");
+        doctorOneId = DOCTOR_ONE_ID;
+        doctorTwoId = DOCTOR_TWO_ID;
 
-        patientOneToken = jwtUtils.generateJwtToken(patientOne);
-        patientTwoToken = jwtUtils.generateJwtToken(patientTwo);
-        patientOneId = patientProfileRepository.findByUserId(patientOne.getId()).orElseThrow().getId();
-        doctorOneId = doctorProfileRepository.findByUserId(doctorOne.getId()).orElseThrow().getId();
-        doctorTwoId = doctorProfileRepository.findByUserId(doctorTwo.getId()).orElseThrow().getId();
+        stubIdentitySnapshots();
+
+        patientOneToken = TestJwtFactory.patientToken(
+                4L, "patient1@medic.com", "John Doe", PATIENT_ONE_ID, TOKEN_VERSION);
+        patientTwoToken = TestJwtFactory.patientToken(
+                5L, "patient2@medic.com", "Jane Clark", PATIENT_TWO_ID, TOKEN_VERSION);
     }
 
     @Test
@@ -202,7 +199,7 @@ class AppointmentConcurrencyIntegrationTest {
 
         assertExactlyOneCreatedAndOneConflict(responses);
         assertEquals(1L, countOverlappingPatientBookings(
-                        patientOneId, date, startTime, startTime.plusMinutes(30)),
+                        PATIENT_ONE_ID, date, startTime, startTime.plusMinutes(30)),
                 "The patient must not retain overlapping active appointments across doctors");
     }
 
@@ -332,6 +329,23 @@ class AppointmentConcurrencyIntegrationTest {
         }
     }
 
+    private void stubIdentitySnapshots() {
+        when(internalIdentityClient.getDoctorSnapshot(DOCTOR_ONE_ID)).thenReturn(IdentityTestData.seedDoctorOne());
+        when(internalIdentityClient.getDoctorSnapshot(DOCTOR_TWO_ID)).thenReturn(IdentityTestData.seedDoctorTwo());
+        when(internalIdentityClient.getPatientSnapshot(PATIENT_ONE_ID)).thenReturn(IdentityTestData.seedPatientOne());
+        when(internalIdentityClient.getPatientSnapshot(PATIENT_TWO_ID)).thenReturn(IdentityTestData.seedPatientTwo());
+        when(internalIdentityClient.getPatientSnapshot(anyLong())).thenAnswer(invocation -> {
+            long patientId = invocation.getArgument(0);
+            if (patientId == PATIENT_ONE_ID) {
+                return IdentityTestData.seedPatientOne();
+            }
+            if (patientId == PATIENT_TWO_ID) {
+                return IdentityTestData.seedPatientTwo();
+            }
+            return IdentityTestData.seedPatientThree();
+        });
+    }
+
     private ApiResponse book(String token, Long doctorId, LocalDate date, LocalTime startTime) throws Exception {
         Map<String, Object> body = Map.of(
                 "doctorId", doctorId,
@@ -452,11 +466,6 @@ class AppointmentConcurrencyIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while holding the slot lock", exception);
         }
-    }
-
-    private User findSeedUser(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException("Missing integration seed user: " + email));
     }
 
     private LocalDate nextWeekdayFromNow(int daysFromNow) {

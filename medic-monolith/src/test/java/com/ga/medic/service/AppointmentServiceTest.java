@@ -1,5 +1,8 @@
 package com.ga.medic.service;
 
+import com.ga.medic.client.InternalIdentityClient;
+import com.ga.medic.client.dto.InternalDoctorSnapshotResponse;
+import com.ga.medic.client.dto.InternalPatientSnapshotResponse;
 import com.ga.medic.dto.request.AppointmentBookingRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.request.RescheduleAppointmentRequest;
@@ -12,9 +15,12 @@ import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
-import com.ga.medic.model.*;
-import com.ga.medic.repository.*;
+import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AvailabilityRule;
+import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.support.IdentityTestData;
 import jakarta.persistence.EntityManager;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,6 +31,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -43,18 +50,15 @@ public class AppointmentServiceTest {
     private final LocalDate DATE = LocalDate.now().plusDays(1);
     private final LocalTime START = LocalTime.of(9, 0);
     private final LocalTime END = LocalTime.of(9, 30);
+
     @Mock
     private AppointmentRepository appointmentRepository;
     @Mock
-    private DoctorProfileRepository doctorProfileRepository;
-    @Mock
-    private PatientProfileRepository patientProfileRepository;
+    private InternalIdentityClient internalIdentityClient;
     @Mock
     private AvailabilityRuleRepository availabilityRuleRepository;
     @Mock
     private AvailabilityRuleService availabilityRuleService;
-    @Mock
-    private AvailabilityExceptionService availabilityExceptionService;
     @Mock
     private AppointmentMapper appointmentMapper;
     @Mock
@@ -73,35 +77,20 @@ public class AppointmentServiceTest {
     private EntityManager entityManager;
     @InjectMocks
     private AppointmentService appointmentService;
-    private PatientProfile patient;
-    private DoctorProfile doctor;
+
+    private InternalPatientSnapshotResponse patient;
+    private InternalDoctorSnapshotResponse doctor;
 
     @Before
     public void setUp() {
-        User patientUser = new User();
-        patientUser.setId(1L);
-        patientUser.setEmail("patient@test.local");
-        patientUser.setFirstName("Patient");
-        patientUser.setLastName("User");
-
-        patient = new PatientProfile();
-        patient.setId(1L);
-        patient.setUser(patientUser);
-        patientUser.setPatientProfile(patient);
-
-        User doctorUser = new User();
-        doctorUser.setId(2L);
-        doctorUser.setEmail("doctor@test.local");
-        doctorUser.setFirstName("Doctor");
-        doctorUser.setLastName("User");
-
-        doctor = new DoctorProfile();
-        doctor.setId(2L);
-        doctor.setUser(doctorUser);
+        patient = IdentityTestData.patient(1L, 1L, "Patient User", "patient@test.local");
+        doctor = IdentityTestData.doctor(
+                2L, 2L, "Doctor User", "doctor@test.local", 1L, BigDecimal.valueOf(100));
 
         when(authenticatedUser.requirePatientId()).thenReturn(1L);
         when(authenticatedUser.getUserId()).thenReturn(1L);
-        when(patientProfileRepository.findById(1L)).thenReturn(Optional.of(patient));
+        when(internalIdentityClient.getPatientSnapshot(1L)).thenReturn(patient);
+        when(internalIdentityClient.getDoctorSnapshot(2L)).thenReturn(doctor);
         ReflectionTestUtils.setField(appointmentService, "entityManager", entityManager);
     }
 
@@ -109,7 +98,8 @@ public class AppointmentServiceTest {
     public void bookAppointment_shouldThrow_whenDoctorNotFound() {
         AppointmentBookingRequest request = mock(AppointmentBookingRequest.class);
         when(request.doctorId()).thenReturn(99L);
-        when(doctorProfileRepository.findById(99L)).thenReturn(Optional.empty());
+        when(internalIdentityClient.getDoctorSnapshot(99L))
+                .thenThrow(new InformationNotFoundException("Doctor profile not found"));
 
         appointmentService.bookAppointment(request);
     }
@@ -120,7 +110,6 @@ public class AppointmentServiceTest {
         when(request.doctorId()).thenReturn(2L);
         when(request.date()).thenReturn(DATE);
         when(request.startTime()).thenReturn(START);
-        when(doctorProfileRepository.findById(2L)).thenReturn(Optional.of(doctor));
         when(availabilityRuleService.getAvailability(any(), any(), any())).thenReturn(List.of());
 
         appointmentService.bookAppointment(request);
@@ -135,7 +124,6 @@ public class AppointmentServiceTest {
         AvailableSlotResponse slot = new AvailableSlotResponse(1L, DATE, START, END, 30);
         Appointment appointment = new Appointment();
 
-        when(doctorProfileRepository.findById(2L)).thenReturn(Optional.of(doctor));
         when(availabilityRuleService.getAvailability(any(), any(), any())).thenReturn(List.of(slot));
         when(availabilityRuleRepository.findById(1L)).thenReturn(Optional.of(new AvailabilityRule()));
         when(appointmentRepository.existsOverlappingForPatient(any(), any(), any(), any())).thenReturn(false);
@@ -146,7 +134,8 @@ public class AppointmentServiceTest {
         appointmentService.bookAppointment(request);
 
         verify(slotLockService).acquirePatient(1L);
-        verify(patientProfileRepository).findById(1L);
+        verify(internalIdentityClient).getPatientSnapshot(1L);
+        verify(internalIdentityClient).getDoctorSnapshot(2L);
         verify(appointmentRepository).saveAndFlush(appointment);
     }
 
@@ -174,11 +163,10 @@ public class AppointmentServiceTest {
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest(newDate, newStartTime, 0L);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(doctorProfileRepository.findById(doctor.getId())).thenReturn(Optional.of(doctor));
-        when(availabilityRuleService.getAvailability(doctor.getId(), newDate, newDate, appointmentId))
+        when(availabilityRuleService.getAvailability(doctor.doctorId(), newDate, newDate, appointmentId))
                 .thenReturn(List.of(targetSlot));
         when(appointmentRepository.existsOverlappingForPatientExcludingAppointment(
-                patient.getId(), newDate, newStartTime, newEndTime, appointmentId)).thenReturn(false);
+                patient.patientId(), newDate, newStartTime, newEndTime, appointmentId)).thenReturn(false);
         when(availabilityRuleRepository.findById(targetRule.getId())).thenReturn(Optional.of(targetRule));
         when(appointmentRepository.saveAndFlush(appointment)).thenReturn(appointment);
 
@@ -201,8 +189,7 @@ public class AppointmentServiceTest {
         LocalTime originalStartTime = appointment.getStartTime();
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(doctorProfileRepository.findById(doctor.getId())).thenReturn(Optional.of(doctor));
-        when(availabilityRuleService.getAvailability(doctor.getId(), targetDate, targetDate, appointmentId))
+        when(availabilityRuleService.getAvailability(doctor.doctorId(), targetDate, targetDate, appointmentId))
                 .thenReturn(List.of());
 
         try {
@@ -219,14 +206,8 @@ public class AppointmentServiceTest {
     @Test(expected = ForbiddenActionException.class)
     public void rescheduleAppointment_shouldRejectAppointmentOwnedByAnotherPatient() {
         Long appointmentId = 10L;
-        User otherPatientUser = new User();
-        otherPatientUser.setId(99L);
-        otherPatientUser.setEmail("other@test.local");
-        otherPatientUser.setFirstName("Other");
-        otherPatientUser.setLastName("Patient");
-        PatientProfile otherPatient = new PatientProfile();
-        otherPatient.setId(2L);
-        otherPatient.setUser(otherPatientUser);
+        InternalPatientSnapshotResponse otherPatient = IdentityTestData.patient(
+                2L, 99L, "Other Patient", "other@test.local");
 
         Appointment appointment = createBookedAppointment(appointmentId, otherPatient, 0L);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
@@ -260,7 +241,8 @@ public class AppointmentServiceTest {
                 new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
     }
 
-    private Appointment createBookedAppointment(Long appointmentId, PatientProfile owner, Long version) {
+    private Appointment createBookedAppointment(
+            Long appointmentId, InternalPatientSnapshotResponse owner, Long version) {
         Appointment appointment = new Appointment();
         appointment.setId(appointmentId);
         appointment.applyPartySnapshots(owner, doctor);
@@ -278,8 +260,6 @@ public class AppointmentServiceTest {
         Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
         AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(doctorProfileRepository.findById(doctor.getId())).thenReturn(Optional.of(doctor));
-        when(patientProfileRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
         when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
 
         assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
@@ -292,8 +272,6 @@ public class AppointmentServiceTest {
         AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
         when(authenticatedUser.getUserId()).thenReturn(2L);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(doctorProfileRepository.findById(doctor.getId())).thenReturn(Optional.of(doctor));
-        when(patientProfileRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
         when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
 
         assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
@@ -308,7 +286,6 @@ public class AppointmentServiceTest {
 
         appointmentService.getAppointmentDetails(appointmentId);
     }
-
 
     @Test(expected = InformationNotFoundException.class)
     public void cancelAppointment_shouldThrow_whenNotFound() {

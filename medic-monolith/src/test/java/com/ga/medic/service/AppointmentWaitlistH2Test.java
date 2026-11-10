@@ -1,16 +1,20 @@
 package com.ga.medic.service;
 
+import com.ga.medic.client.InternalIdentityClient;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
 import com.ga.medic.dto.request.CancelAppointmentRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;
 import com.ga.medic.enums.AppointmentStatusEnum;
-import com.ga.medic.enums.RoleEnum;
-import com.ga.medic.enums.UserStatusEnum;
 import com.ga.medic.enums.WaitlistStatusEnum;
-import com.ga.medic.model.*;
-import com.ga.medic.repository.*;
+import com.ga.medic.model.Appointment;
+import com.ga.medic.model.AppointmentWaitlistEntry;
+import com.ga.medic.model.AvailabilityRule;
+import com.ga.medic.repository.AppointmentRepository;
+import com.ga.medic.repository.AppointmentWaitlistEntryRepository;
+import com.ga.medic.repository.AvailabilityRuleRepository;
 import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.support.IdentityTestData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,14 +30,19 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.EnumSet;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:appointment_waitlist;DB_CLOSE_DELAY=-1")
 @ActiveProfiles("test")
 class AppointmentWaitlistH2Test {
+
+    private static final long DOCTOR_ID = 1L;
+    private static final long FIRST_WAITER_PATIENT_ID = 101L;
+    private static final long SECOND_WAITER_PATIENT_ID = 102L;
+    private static final long OCCUPANT_PATIENT_ID = 103L;
 
     @Autowired
     private AppointmentWaitlistService waitlistService;
@@ -43,21 +52,6 @@ class AppointmentWaitlistH2Test {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
-
-    @Autowired
-    private RoleRepository roleRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PatientProfileRepository patientProfileRepository;
-
-    @Autowired
-    private DoctorProfileRepository doctorProfileRepository;
-
-    @Autowired
-    private SpecializationRepository specializationRepository;
 
     @Autowired
     private AvailabilityRuleRepository availabilityRuleRepository;
@@ -72,26 +66,27 @@ class AppointmentWaitlistH2Test {
     private AuthenticatedUser authenticatedUser;
 
     @MockitoBean
-    private EmailService emailService;
+    private InternalIdentityClient internalIdentityClient;
 
     private TestData testData;
 
     @BeforeEach
     void setUp() {
+        stubIdentitySnapshots();
         testData = new TransactionTemplate(transactionManager).execute(status -> createTestData());
     }
 
     @Test
     void waitlistOffersNextPatientAndAcceptsBooking() {
         AppointmentWaitlistEntryResponse firstWaiter = joinAs(
-                testData.firstWaiterEmail(), testData.doctorId(), testData.date(), testData.startTime());
+                FIRST_WAITER_PATIENT_ID, testData.doctorId(), testData.date(), testData.startTime());
         AppointmentWaitlistEntryResponse secondWaiter = joinAs(
-                testData.secondWaiterEmail(), testData.doctorId(), testData.date(), testData.startTime());
+                SECOND_WAITER_PATIENT_ID, testData.doctorId(), testData.date(), testData.startTime());
 
         assertEquals(WaitlistStatusEnum.WAITING, firstWaiter.status());
         assertEquals(WaitlistStatusEnum.WAITING, secondWaiter.status());
 
-        authenticateAs(testData.occupantEmail());
+        authenticateAs(OCCUPANT_PATIENT_ID, 1003L, "Occupant Patient");
         AppointmentResponse cancelled = appointmentService.cancelAppointment(
                 testData.occupiedAppointmentId(), new CancelAppointmentRequest("Release slot for waitlist"));
         assertEquals(AppointmentStatusEnum.CANCELLED, cancelled.status());
@@ -102,14 +97,14 @@ class AppointmentWaitlistH2Test {
                 waitlistEntryRepository.findById(secondWaiter.id()).orElseThrow().getStatus());
         assertEquals(15 * 60, Duration.between(offeredToFirst.getOfferedAt(), offeredToFirst.getOfferExpiresAt()).getSeconds());
 
-        authenticateAs(testData.firstWaiterEmail());
+        authenticateAs(FIRST_WAITER_PATIENT_ID, 1001L, "First Waiter");
         waitlistService.withdraw(firstWaiter.id());
         assertEquals(WaitlistStatusEnum.CANCELLED,
                 waitlistEntryRepository.findById(firstWaiter.id()).orElseThrow().getStatus());
         assertEquals(WaitlistStatusEnum.OFFERED,
                 waitlistEntryRepository.findById(secondWaiter.id()).orElseThrow().getStatus());
 
-        authenticateAs(testData.secondWaiterEmail());
+        authenticateAs(SECOND_WAITER_PATIENT_ID, 1002L, "Second Waiter");
         AppointmentResponse booked = waitlistService.accept(secondWaiter.id());
         assertEquals(AppointmentStatusEnum.BOOKED, booked.status());
         assertEquals(testData.date(), booked.appointmentDate());
@@ -120,39 +115,14 @@ class AppointmentWaitlistH2Test {
                 testData.doctorId(), testData.date(), testData.startTime(), testData.startTime().plusMinutes(30)).size());
     }
 
-    private AppointmentWaitlistEntryResponse joinAs(String email, Long doctorId, LocalDate date, LocalTime startTime) {
-        authenticateAs(email);
+    private AppointmentWaitlistEntryResponse joinAs(Long patientId, Long doctorId, LocalDate date, LocalTime startTime) {
+        authenticateAs(patientId, patientUserId(patientId), patientName(patientId));
         return waitlistService.join(new AppointmentWaitlistRequest(doctorId, date, startTime));
     }
 
     private TestData createTestData() {
-        Role patientRole = findOrCreateRole(RoleEnum.PATIENT);
-        Role doctorRole = findOrCreateRole(RoleEnum.DOCTOR);
-        User firstWaiter = createUser(patientRole, "first-waiter");
-        User secondWaiter = createUser(patientRole, "second-waiter");
-        User occupant = createUser(patientRole, "occupant");
-        User doctorUser = createUser(doctorRole, "doctor");
-
-        createPatientProfile(firstWaiter);
-        createPatientProfile(secondWaiter);
-        PatientProfile occupantPatient = createPatientProfile(occupant);
-
-        Specialization specialization = new Specialization();
-        specialization.setName("Waitlist " + UUID.randomUUID());
-        specialization.setDescription("Waitlist integration test");
-        specialization = specializationRepository.saveAndFlush(specialization);
-
-        DoctorProfile doctor = new DoctorProfile();
-        doctor.setUser(doctorUser);
-        doctorUser.setDoctorProfile(doctor);
-        doctor.setSpecialization(specialization);
-        doctor.setLicenseNumber("WAITLIST-" + UUID.randomUUID());
-        doctor.setConsultationFee(BigDecimal.valueOf(100));
-        doctor.setIsVerified(true);
-        doctor = doctorProfileRepository.saveAndFlush(doctor);
-
         AvailabilityRule rule = new AvailabilityRule();
-        rule.setDoctorId(doctor.getId());
+        rule.setDoctorId(DOCTOR_ID);
         rule.setStartDate(LocalDate.now().minusDays(1));
         rule.setEndDate(LocalDate.now().plusDays(90));
         rule.setDaysOfWeek(EnumSet.allOf(DayOfWeek.class));
@@ -164,61 +134,59 @@ class AppointmentWaitlistH2Test {
         LocalDate date = LocalDate.now().plusDays(7);
         LocalTime startTime = LocalTime.of(10, 0);
         Appointment occupiedAppointment = new Appointment();
-        occupiedAppointment.applyPartySnapshots(occupantPatient, doctor);
+        occupiedAppointment.applyPartySnapshots(
+                IdentityTestData.patient(
+                        OCCUPANT_PATIENT_ID, 1003L, "Occupant Patient", "occupant@example.test"),
+                IdentityTestData.doctor(
+                        DOCTOR_ID, 2001L, "Waitlist Doctor", "doctor@example.test", 1L, BigDecimal.valueOf(100)));
         occupiedAppointment.setAvailabilityRuleId(rule.getId());
         occupiedAppointment.setAppointmentDate(date);
         occupiedAppointment.setStartTime(startTime);
         occupiedAppointment.setEndTime(startTime.plusMinutes(30));
-        occupiedAppointment.setBookingFee(doctor.getConsultationFee());
+        occupiedAppointment.setBookingFee(BigDecimal.valueOf(100));
         occupiedAppointment.setStatus(AppointmentStatusEnum.BOOKED);
         occupiedAppointment = appointmentRepository.saveAndFlush(occupiedAppointment);
 
-        return new TestData(firstWaiter.getEmail(), secondWaiter.getEmail(), occupant.getEmail(),
-                doctor.getId(), occupiedAppointment.getId(), date, startTime);
+        return new TestData(DOCTOR_ID, occupiedAppointment.getId(), date, startTime);
     }
 
-    private PatientProfile createPatientProfile(User user) {
-        PatientProfile patient = new PatientProfile();
-        patient.setUser(user);
-        user.setPatientProfile(patient);
-        return patientProfileRepository.saveAndFlush(patient);
+    private void stubIdentitySnapshots() {
+        when(internalIdentityClient.getDoctorSnapshot(DOCTOR_ID)).thenReturn(IdentityTestData.doctor(
+                DOCTOR_ID, 2001L, "Waitlist Doctor", "doctor@example.test", 1L, BigDecimal.valueOf(100)));
+        when(internalIdentityClient.getPatientSnapshot(FIRST_WAITER_PATIENT_ID)).thenReturn(IdentityTestData.patient(
+                FIRST_WAITER_PATIENT_ID, 1001L, "First Waiter", "first-waiter@example.test"));
+        when(internalIdentityClient.getPatientSnapshot(SECOND_WAITER_PATIENT_ID)).thenReturn(IdentityTestData.patient(
+                SECOND_WAITER_PATIENT_ID, 1002L, "Second Waiter", "second-waiter@example.test"));
+        when(internalIdentityClient.getPatientSnapshot(OCCUPANT_PATIENT_ID)).thenReturn(IdentityTestData.patient(
+                OCCUPANT_PATIENT_ID, 1003L, "Occupant Patient", "occupant@example.test"));
+        when(internalIdentityClient.getPatientSnapshot(anyLong())).thenAnswer(invocation -> {
+            long patientId = invocation.getArgument(0);
+            return IdentityTestData.patient(
+                    patientId, patientUserId(patientId), patientName(patientId), "patient" + patientId + "@example.test");
+        });
     }
 
-    private Role findOrCreateRole(RoleEnum roleEnum) {
-        return roleRepository.findByName(roleEnum)
-                .orElseGet(() -> {
-                    Role role = new Role();
-                    role.setName(roleEnum);
-                    return roleRepository.saveAndFlush(role);
-                });
+    private void authenticateAs(long patientId, long userId, String name) {
+        when(authenticatedUser.getUserId()).thenReturn(userId);
+        when(authenticatedUser.requirePatientId()).thenReturn(patientId);
+        when(authenticatedUser.getPatientId()).thenReturn(patientId);
+        when(authenticatedUser.getName()).thenReturn(name);
     }
 
-    private User createUser(Role role, String name) {
-        String suffix = UUID.randomUUID().toString();
-        User user = new User();
-        user.setRole(role);
-        user.setEmail(name + "-" + suffix + "@example.test");
-        user.setPassword("test-only-password");
-        user.setFirstName(name);
-        user.setLastName("integration");
-        user.setDateOfBirth(LocalDate.of(1990, 1, 1));
-        user.setPhone("555" + suffix.replace("-", "").substring(0, 10));
-        user.setStatus(UserStatusEnum.ACTIVE);
-        return userRepository.saveAndFlush(user);
+    private static long patientUserId(long patientId) {
+        return 1000L + patientId;
     }
 
-    private void authenticateAs(String email) {
-        User user = userRepository.findByEmail(email).orElseThrow();
-        when(authenticatedUser.getUserId()).thenReturn(user.getId());
-        when(authenticatedUser.requirePatientId()).thenReturn(user.getPatientProfile().getId());
-        when(authenticatedUser.getPatientId()).thenReturn(user.getPatientProfile().getId());
-        when(authenticatedUser.getName()).thenReturn(user.getFullName());
+    private static String patientName(long patientId) {
+        return switch ((int) patientId) {
+            case 101 -> "First Waiter";
+            case 102 -> "Second Waiter";
+            case 103 -> "Occupant Patient";
+            default -> "Patient " + patientId;
+        };
     }
 
     private record TestData(
-            String firstWaiterEmail,
-            String secondWaiterEmail,
-            String occupantEmail,
             Long doctorId,
             Long occupiedAppointmentId,
             LocalDate date,
