@@ -18,3 +18,5 @@ CREATE TABLE processed_event (
     event_id     VARCHAR(64) PRIMARY KEY,
     processed_at TIMESTAMP(6) WITH TIME ZONE NOT NULL
 );
+
+CREATE INDEX idx_processed_event_processed_at ON processed_event (processed_at);
