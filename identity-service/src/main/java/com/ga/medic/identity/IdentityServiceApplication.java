@@ -1,4 +1,4 @@
-package com.ga.medic.identity.identity;
+package com.ga.medic.identity;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
