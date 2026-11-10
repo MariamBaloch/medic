@@ -1,0 +1,128 @@
+package com.ga.medic.identity.service;
+
+import com.ga.medic.identity.config.Constants;
+import com.ga.medic.identity.dto.request.UserAccountUpdateRequest;
+import com.ga.medic.identity.dto.response.UserAccountResponse;
+import com.ga.medic.identity.enums.UserStatusEnum;
+import com.ga.medic.identity.exception.InformationNotFoundException;
+import com.ga.medic.identity.mapper.UserMapper;
+import com.ga.medic.identity.model.User;
+import com.ga.medic.identity.repository.UserRepository;
+import com.ga.medic.common.security.AuthenticatedUser;
+import com.ga.medic.common.security.TokenVersionService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.time.Instant;
+
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final FileStorageService storageService;
+    private final AuthenticatedUser authenticatedUser;
+    private final UserMapper userMapper;
+    private final TokenVersionService tokenVersionService;
+    private final IdentityEventService identityEventService;
+
+    /**
+     * Validates and stores a replacement avatar, then updates the authenticated user's image URL.
+     *
+     * @param file the image file to use as the new avatar
+     * @return the stored avatar path
+     */
+    @Transactional
+    public String updateProfilePicture(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("No Image file selected");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/") || !Constants.ALLOWED_IMAGE_TYPES.contains(contentType.toLowerCase())) {
+            throw new IllegalArgumentException("Only image files (JPEG, JPG, PNG, WEBP) are allowed for profile pictures.");
+        }
+
+        Long userId = authenticatedUser.getUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+
+        if (user.getImageUrl() != null) {
+            storageService.delete(user.getImageUrl());
+        }
+
+        String imageUrl = storageService.store(file, "avatars");
+
+        user.setImageUrl(imageUrl);
+        userRepository.save(user);
+        identityEventService.userUpdated(user);
+
+        return imageUrl;
+    }
+
+    /**
+     * Retrieves the authenticated user's account details.
+     *
+     * @return the authenticated user's account response
+     */
+    @Transactional
+    public UserAccountResponse getUserAccount() {
+        Long userId = authenticatedUser.getUserId();
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+        return userMapper.toResponse(user);
+    }
+
+    /**
+     * Updates editable details on the authenticated user's account without changing the email or account role.
+     *
+     * @param request the editable account fields
+     * @return the updated user account response
+     */
+    @Transactional
+    public UserAccountResponse updateUserAccount(UserAccountUpdateRequest request) {
+        Long userId = authenticatedUser.getUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPhone(request.phone());
+        user.setGender(request.gender());
+
+        User saved = userRepository.save(user);
+        identityEventService.userUpdated(saved);
+        return userMapper.toResponse(saved);
+    }
+
+    /**
+     * Marks a user as deleted while retaining the account and its related records.
+     *
+     * @param userId the ID of the account to soft delete
+     */
+    @Transactional
+    public void softDeleteUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InformationNotFoundException("User with id " + userId + " not found"));
+
+        user.setStatus(UserStatusEnum.DELETED);
+        if (user.getDeletedAt() == null) {
+            user.setDeletedAt(Instant.now());
+        }
+        user.setVerificationToken(null);
+        user.setTokenExpiry(null);
+        user.setResetPasswordToken(null);
+        user.setResetPasswordTokenExpiry(null);
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        tokenVersionService.store(user.getId(), user.getTokenVersion());
+        userRepository.save(user);
+        identityEventService.userDeactivated(user);
+        if (user.getDoctorProfile() != null) {
+            identityEventService.doctorDeactivated(user.getDoctorProfile());
+        }
+    }
+}

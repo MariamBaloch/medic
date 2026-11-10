@@ -1,0 +1,51 @@
+package com.ga.medic.identity.controller;
+
+import com.ga.medic.identity.dto.request.UserAccountUpdateRequest;
+import com.ga.medic.identity.dto.response.UserAccountResponse;
+import com.ga.medic.identity.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/user")
+@Tag(name = "User", description = "User account management")
+@SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("isAuthenticated()")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @Operation(summary = "Upload Profile Picture",
+            description = "Uploads a new profile picture or updates it if already exists and deletes the old one")
+    @PatchMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadProfilePicture(@RequestParam("file") MultipartFile file) {
+        String imageUrl = userService.updateProfilePicture(file);
+        return ResponseEntity.ok(Map.of("imageUrl", imageUrl));
+    }
+
+    @Operation(summary = "Retrieve User Account",
+            description = "Returns the user account information")
+    @GetMapping
+    public UserAccountResponse getUserAccount() {
+        return userService.getUserAccount();
+    }
+
+    @Operation(summary = "Update User Account",
+            description = "Updates the authenticated user's first name, last name, date of birth, phone, and gender. Email is not editable through this endpoint.")
+    @PutMapping
+    public ResponseEntity<UserAccountResponse> updateUserAccount(
+            @Valid @RequestBody UserAccountUpdateRequest request) {
+        return ResponseEntity.ok(userService.updateUserAccount(request));
+    }
+}
