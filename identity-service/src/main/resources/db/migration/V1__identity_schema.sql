@@ -78,14 +78,6 @@ CREATE TABLE patient_profile (
     CONSTRAINT fk_patient_profile_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE doctor_availability_summary (
-    doctor_profile_id BIGINT PRIMARY KEY,
-    has_future_availability BOOLEAN NOT NULL DEFAULT FALSE,
-    updated_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_doctor_availability_summary_doctor
-        FOREIGN KEY (doctor_profile_id) REFERENCES doctor_profiles (id) ON DELETE CASCADE
-);
-
 CREATE TABLE outbox_event (
     id              BIGSERIAL PRIMARY KEY,
     event_id        VARCHAR(36)  NOT NULL,
@@ -101,10 +93,3 @@ CREATE TABLE outbox_event (
 );
 
 CREATE INDEX idx_outbox_unpublished ON outbox_event (id) WHERE published_at IS NULL;
-
-CREATE TABLE processed_event (
-    event_id     VARCHAR(64) PRIMARY KEY,
-    processed_at TIMESTAMP(6) WITH TIME ZONE NOT NULL
-);
-
-CREATE INDEX idx_processed_event_processed_at ON processed_event (processed_at);
