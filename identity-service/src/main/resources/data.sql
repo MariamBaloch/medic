@@ -1,4 +1,6 @@
 -- Identity seed (roles, users, profiles only; no booking tables)
+SET search_path TO identity;
+
 INSERT INTO roles (name, created_at, updated_at) VALUES
 ('ADMIN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('DOCTOR', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
