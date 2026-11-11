@@ -1,8 +1,8 @@
 package com.ga.medic.notification.kafka;
 
 import com.ga.medic.common.event.EventEnvelope;
-import com.ga.medic.notification.model.ProcessedEvent;
-import com.ga.medic.notification.repository.ProcessedEventRepository;
+import com.ga.medic.messaging.consumer.ProcessedEvent;
+import com.ga.medic.messaging.consumer.ProcessedEventRepository;
 import com.ga.medic.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,9 +1,7 @@
-package com.ga.medic.identity.service;
+package com.ga.medic.messaging.outbox;
 
 import com.ga.medic.common.api.CorrelationId;
 import com.ga.medic.common.event.TopicNames;
-import com.ga.medic.identity.model.OutboxEvent;
-import com.ga.medic.identity.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;

@@ -4,6 +4,7 @@ import com.ga.medic.common.event.EventTypes;
 import com.ga.medic.identity.mapper.IdentityEventPayloadMapper;
 import com.ga.medic.identity.model.DoctorProfile;
 import com.ga.medic.identity.model.User;
+import com.ga.medic.messaging.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

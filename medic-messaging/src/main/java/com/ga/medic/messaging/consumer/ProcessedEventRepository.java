@@ -1,6 +1,5 @@
-package com.ga.medic.notification.repository;
+package com.ga.medic.messaging.consumer;
 
-import com.ga.medic.notification.model.ProcessedEvent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

@@ -1,9 +1,7 @@
-package com.ga.medic.service;
+package com.ga.medic.messaging.outbox;
 
 import com.ga.medic.common.api.CorrelationId;
 import com.ga.medic.common.event.EventEnvelope;
-import com.ga.medic.model.OutboxEvent;
-import com.ga.medic.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +29,6 @@ public class OutboxService {
     public static Map<String, Object> payload(Object... keyValues) {
         return payload(null, keyValues);
     }
-
 
     public static Map<String, Object> payload(Map<String, Object> base, Object... keyValues) {
         if (keyValues.length % 2 != 0) {

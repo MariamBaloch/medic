@@ -1,4 +1,4 @@
-package com.ga.medic.notification.model;
+package com.ga.medic.messaging.consumer;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

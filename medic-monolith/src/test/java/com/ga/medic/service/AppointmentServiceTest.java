@@ -15,6 +15,7 @@ import com.ga.medic.exception.SlotNotAvailableException;
 import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
+import com.ga.medic.messaging.outbox.OutboxService;
 import com.ga.medic.model.Appointment;
 import com.ga.medic.model.AvailabilityRule;
 import com.ga.medic.repository.AppointmentRepository;

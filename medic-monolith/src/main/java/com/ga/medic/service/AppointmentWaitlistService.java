@@ -19,6 +19,7 @@ import com.ga.medic.mapper.AppointmentMapper;
 import com.ga.medic.mapper.AppointmentWaitlistEntryMapper;
 import com.ga.medic.mapper.OutboxPayloadMapper;
 import com.ga.medic.mapper.PageMapper;
+import com.ga.medic.messaging.outbox.OutboxService;
 import com.ga.medic.client.InternalIdentityClient;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;

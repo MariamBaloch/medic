@@ -1,6 +1,5 @@
-package com.ga.medic.identity.repository;
+package com.ga.medic.messaging.outbox;
 
-import com.ga.medic.identity.model.OutboxEvent;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import org.springframework.data.domain.Pageable;

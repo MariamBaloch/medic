@@ -1,6 +1,5 @@
-package com.ga.medic.notification.service;
+package com.ga.medic.messaging.consumer;
 
-import com.ga.medic.notification.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,7 +11,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Deletes processed-event markers older than the configured retention window
+ * Deletes processed-event older than the configured retention window
  */
 @Slf4j
 @Component

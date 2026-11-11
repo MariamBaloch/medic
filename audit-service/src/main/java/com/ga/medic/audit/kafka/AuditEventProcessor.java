@@ -2,8 +2,8 @@ package com.ga.medic.audit.kafka;
 
 import com.ga.medic.audit.enums.AuditAction;
 import com.ga.medic.audit.enums.AuditEntityType;
-import com.ga.medic.audit.model.ProcessedEvent;
-import com.ga.medic.audit.repository.ProcessedEventRepository;
+import com.ga.medic.messaging.consumer.ProcessedEvent;
+import com.ga.medic.messaging.consumer.ProcessedEventRepository;
 import com.ga.medic.audit.service.AuditLogService;
 import com.ga.medic.common.event.EventEnvelope;
 import lombok.RequiredArgsConstructor;

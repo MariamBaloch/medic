@@ -1,0 +1,3 @@
+com.ga.medic.messaging.outbox.OutboxMessagingAutoConfiguration
+com.ga.medic.messaging.consumer.ProcessedEventAutoConfiguration
+com.ga.medic.messaging.kafka.KafkaDltAutoConfiguration

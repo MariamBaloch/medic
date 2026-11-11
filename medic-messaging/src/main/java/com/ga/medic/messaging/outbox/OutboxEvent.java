@@ -1,4 +1,4 @@
-package com.ga.medic.identity.model;
+package com.ga.medic.messaging.outbox;
 
 import jakarta.persistence.*;
 import lombok.Getter;
