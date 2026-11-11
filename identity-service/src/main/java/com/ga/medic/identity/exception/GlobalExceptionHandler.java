@@ -1,6 +1,6 @@
 package com.ga.medic.identity.exception;
 
-import com.ga.medic.identity.dto.response.ErrorResponse;
+import com.ga.medic.web.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;

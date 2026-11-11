@@ -2,7 +2,7 @@ package com.ga.medic.notification.controller;
 
 import com.ga.medic.notification.dto.MarkAllNotificationsReadResponse;
 import com.ga.medic.notification.dto.NotificationResponse;
-import com.ga.medic.notification.dto.PageResponse;
+import com.ga.medic.web.dto.PageResponse;
 import com.ga.medic.notification.dto.UnreadNotificationCountResponse;
 import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.notification.service.NotificationService;

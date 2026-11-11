@@ -1,7 +1,8 @@
-package com.ga.medic.identity.dto.response;
+package com.ga.medic.web.dto;
 
 import java.util.List;
 
+/** Shared paginated API response. */
 public record PageResponse<T>(
         List<T> content,
         int page, int size,

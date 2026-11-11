@@ -2,14 +2,14 @@ package com.ga.medic.notification.service;
 
 import com.ga.medic.notification.dto.MarkAllNotificationsReadResponse;
 import com.ga.medic.notification.dto.NotificationResponse;
-import com.ga.medic.notification.dto.PageResponse;
+import com.ga.medic.web.dto.PageResponse;
 import com.ga.medic.notification.dto.UnreadNotificationCountResponse;
 import com.ga.medic.notification.enums.NotificationAction;
 import com.ga.medic.notification.enums.NotificationType;
 import com.ga.medic.notification.event.NotificationDispatchEvent;
 import com.ga.medic.notification.exception.InformationNotFoundException;
 import com.ga.medic.notification.mapper.NotificationMapper;
-import com.ga.medic.notification.mapper.PageMapper;
+import com.ga.medic.web.PageMapper;
 import com.ga.medic.notification.model.Notification;
 import com.ga.medic.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;

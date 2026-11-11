@@ -4,7 +4,7 @@ import com.ga.medic.dto.request.AppointmentWaitlistFilterRequest;
 import com.ga.medic.dto.request.AppointmentWaitlistRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentWaitlistEntryResponse;
-import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.web.dto.PageResponse;
 import com.ga.medic.service.AppointmentWaitlistService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

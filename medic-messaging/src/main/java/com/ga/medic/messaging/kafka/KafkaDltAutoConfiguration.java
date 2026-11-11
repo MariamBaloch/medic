@@ -14,9 +14,7 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 import tools.jackson.core.JacksonException;
 
-/**
- * Shared Kafka DLT error handler for consumer services.
- */
+/** Retries failed Kafka messages, then sends them to a dead-letter topic. */
 @Slf4j
 @AutoConfiguration
 @ConditionalOnProperty(name = "spring.kafka.consumer.group-id")

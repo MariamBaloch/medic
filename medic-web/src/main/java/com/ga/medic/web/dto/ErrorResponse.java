@@ -1,10 +1,11 @@
-package com.ga.medic.identity.dto.response;
+package com.ga.medic.web.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/** Shared API error body. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ErrorResponse(
         LocalDateTime timestamp,

@@ -1,13 +1,14 @@
-package com.ga.medic.mapper;
+package com.ga.medic.web;
 
-import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.web.dto.PageResponse;
 import org.springframework.data.domain.Page;
-import org.springframework.stereotype.Component;
 
 import java.util.function.Function;
 
-@Component
+/** Maps a Spring Page to a PageResponse. */
 public class PageMapper {
+
+    /** Maps each row and keeps page info (number, size, totals). */
     public <E, D> PageResponse<D> toResponse(Page<E> page, Function<E, D> mapper) {
         return new PageResponse<>(
                 page.getContent().stream().map(mapper).toList(),

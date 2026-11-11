@@ -6,7 +6,7 @@ import com.ga.medic.dto.request.AppointmentStatusCountFilterRequest;
 import com.ga.medic.dto.request.UpdateAppointmentStatusRequest;
 import com.ga.medic.dto.response.AppointmentResponse;
 import com.ga.medic.dto.response.AppointmentStatusCountsResponse;
-import com.ga.medic.dto.response.PageResponse;
+import com.ga.medic.web.dto.PageResponse;
 import com.ga.medic.enums.AuditAction;
 import com.ga.medic.enums.AuditEntityType;
 import com.ga.medic.service.AppointmentService;

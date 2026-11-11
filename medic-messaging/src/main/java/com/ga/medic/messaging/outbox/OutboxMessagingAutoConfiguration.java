@@ -5,9 +5,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.ComponentScan;
 
-/**
- * Enables shared outbox persistence and publisher when app.outbox.enabled=true
- */
+/** Turns on outbox when app.outbox.enabled=true. */
 @AutoConfiguration
 @ConditionalOnProperty(name = "app.outbox.enabled", havingValue = "true")
 @AutoConfigurationPackage(basePackageClasses = OutboxEvent.class)

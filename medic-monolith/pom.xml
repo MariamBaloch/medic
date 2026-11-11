@@ -26,6 +26,10 @@
             <groupId>com.ga</groupId>
             <artifactId>medic-messaging</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.ga</groupId>
+            <artifactId>medic-web</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

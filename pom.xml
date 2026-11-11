@@ -19,6 +19,8 @@
     <modules>
         <module>medic-common</module>
         <module>medic-security</module>
+        <module>medic-messaging</module>
+        <module>medic-web</module>
         <module>medic-monolith</module>
         <module>gateway-service</module>
         <module>notification-service</module>
@@ -58,6 +60,16 @@
             <dependency>
                 <groupId>com.ga</groupId>
                 <artifactId>medic-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ga</groupId>
+                <artifactId>medic-messaging</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ga</groupId>
+                <artifactId>medic-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
