@@ -13,7 +13,6 @@ spring:
   http:
     clients:
       connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
-
       read-timeout: ${GATEWAY_READ_TIMEOUT:1h}
   cloud:
     gateway:
@@ -23,18 +22,30 @@ spring:
             - text/event-stream
             - application/stream+json
           routes:
-            - id: notifications
+            - id: identity
+              uri: ${IDENTITY_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/identity/**
+              filters:
+                - StripPrefix=2
+            - id: notification
               uri: ${NOTIFICATION_URL:http://localhost:8084}
               predicates:
-                - Path=/notifications/**
-            - id: audit-logs
+                - Path=/api/notification,/api/notification/**
+              filters:
+                - StripPrefix=2
+            - id: audit
               uri: ${AUDIT_URL:http://localhost:8085}
               predicates:
-                - Path=/audit-logs/**
-            - id: monolith
+                - Path=/api/audit,/api/audit/**
+              filters:
+                - StripPrefix=2
+            - id: booking
               uri: ${MONOLITH_URL:http://localhost:8081}
               predicates:
-                - Path=/**
+                - Path=/api/booking/**
+              filters:
+                - StripPrefix=2
 
 app:
   cors:

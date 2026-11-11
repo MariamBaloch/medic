@@ -15,12 +15,15 @@ public class FileStorageService {
     @Value("${app.upload.base-dir:uploads}")
     private String baseDirectory;
 
+    @Value("${app.public-base-path:/api/identity}")
+    private String publicBasePath;
+
     /**
      * Stores a non-empty file under a generated name while retaining its original extension.
      *
      * @param file the file to store
      * @param subFolder the folder under the configured upload directory
-     * @return the stored file's path
+     * @return gateway-facing path including the public base path
      */
     public String store(MultipartFile file, String subFolder) {
         if (file == null || file.isEmpty()) {
@@ -39,7 +42,8 @@ public class FileStorageService {
             Path targetLocation = targetDirectory.resolve(storedFileName);
             file.transferTo(targetLocation);
 
-            return "/" + baseDirectory + "/" + subFolder + "/" + storedFileName;
+            String relativePath = "/" + baseDirectory + "/" + subFolder + "/" + storedFileName;
+            return publicBasePath + relativePath;
         } catch (IOException ex) {
             throw new RuntimeException("Failed to store file", ex);
         }
@@ -48,12 +52,16 @@ public class FileStorageService {
     /**
      * Deletes a stored file when present; filesystem deletion errors are ignored.
      *
-     * @param filePath the path of the file to delete
+     * @param filePath the path of the file to delete (may include the public base path)
      */
     public void delete(String filePath) {
         if (filePath == null || filePath.isBlank()) return;
         try {
-            Path file = Paths.get(filePath.replaceFirst("^/", "")).toAbsolutePath().normalize();
+            String relative = filePath;
+            if (publicBasePath != null && !publicBasePath.isBlank() && relative.startsWith(publicBasePath)) {
+                relative = relative.substring(publicBasePath.length());
+            }
+            Path file = Paths.get(relative.replaceFirst("^/", "")).toAbsolutePath().normalize();
             Files.deleteIfExists(file);
         } catch (IOException ignored) {
 

@@ -193,7 +193,7 @@ public class AuthService {
                 "email/email-verification",
                 Map.of(
                         "fullName", user.getFullName(),
-                        "verificationLink", appBaseUrl + "/auth/users/verify?token=" + user.getVerificationToken(),
+                        "verificationLink", appBaseUrl + "/api/identity/auth/users/verify?token=" + user.getVerificationToken(),
                         "expiryMinutes", EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES
                 )
         );

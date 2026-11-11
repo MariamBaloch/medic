@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.regex.Pattern;
 
 /**
  * Blocks public access to service-to-service paths at the gateway.
@@ -20,8 +21,12 @@ import java.io.IOException;
 @Order(Ordered.HIGHEST_PRECEDENCE + 5)
 public class BlockInternalPathFilter extends OncePerRequestFilter {
 
+    private static final Pattern API_INTERNAL = Pattern.compile("^/api/[^/]+/internal(/|$)");
+
     public static boolean isInternalPath(String path) {
-        return path.equals("/internal") || path.startsWith("/internal/");
+        return path.equals("/internal")
+                || path.startsWith("/internal/")
+                || API_INTERNAL.matcher(path).find();
     }
 
     @Override

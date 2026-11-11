@@ -25,7 +25,10 @@ class InternalPathBlockedTest {
         mockMvc.perform(get("/internal/doctors/1"))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(get("/internal/patients/2"))
+        mockMvc.perform(get("/api/identity/internal/doctors/1"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/booking/internal/anything"))
                 .andExpect(status().isNotFound());
     }
 
@@ -33,6 +36,10 @@ class InternalPathBlockedTest {
     void recognizesInternalPaths() {
         assertThat(BlockInternalPathFilter.isInternalPath("/internal")).isTrue();
         assertThat(BlockInternalPathFilter.isInternalPath("/internal/doctors/1")).isTrue();
-        assertThat(BlockInternalPathFilter.isInternalPath("/auth/users/login")).isFalse();
+        assertThat(BlockInternalPathFilter.isInternalPath("/api/identity/internal")).isTrue();
+        assertThat(BlockInternalPathFilter.isInternalPath("/api/identity/internal/doctors/1")).isTrue();
+        assertThat(BlockInternalPathFilter.isInternalPath("/api/notification/internal")).isTrue();
+        assertThat(BlockInternalPathFilter.isInternalPath("/api/identity/auth/users/login")).isFalse();
+        assertThat(BlockInternalPathFilter.isInternalPath("/api/identity/uploads/x")).isFalse();
     }
 }

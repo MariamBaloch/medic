@@ -33,10 +33,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final LettuceBasedProxyManager<byte[]> proxyManager;
     private final RateLimiterConfig rateLimiterConfig;
 
+    private static final String AUTH_PREFIX = "/api/identity/auth/users";
+
     static boolean isRateLimited(String path) {
-        return path.startsWith("/auth/users")
-                && !path.equals("/auth/users/change-password")
-                && !path.equals("/auth/users/logout");
+        return path.startsWith(AUTH_PREFIX)
+                && !path.equals(AUTH_PREFIX + "/change-password")
+                && !path.equals(AUTH_PREFIX + "/logout");
     }
 
     @Override

@@ -2,10 +2,10 @@ package com.ga.medic.notification.controller;
 
 import com.ga.medic.notification.dto.MarkAllNotificationsReadResponse;
 import com.ga.medic.notification.dto.NotificationResponse;
-import com.ga.medic.web.dto.PageResponse;
 import com.ga.medic.notification.dto.UnreadNotificationCountResponse;
-import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.notification.service.NotificationService;
+import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.web.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping("/notifications")
 @Tag(name = "Notifications")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("isAuthenticated()")
