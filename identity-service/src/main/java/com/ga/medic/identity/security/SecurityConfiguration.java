@@ -1,6 +1,7 @@
 package com.ga.medic.identity.security;
 
 import com.ga.medic.security.InternalApiKeyFilter;
+import com.ga.medic.security.JwtAuthenticationEntryPoint;
 import com.ga.medic.security.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ public class SecurityConfiguration {
 
     private final JwtRequestFilter jwtRequestFilter;
     private final InternalApiKeyFilter internalApiKeyFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -32,6 +35,7 @@ public class SecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/users/change-password").authenticated()
                         .requestMatchers(
