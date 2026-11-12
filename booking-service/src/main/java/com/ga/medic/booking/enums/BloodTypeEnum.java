@@ -18,6 +18,18 @@ public enum BloodTypeEnum {
         this.value = value;
     }
 
+    public static BloodTypeEnum fromValue(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        for (BloodTypeEnum type : values()) {
+            if (type.value.equals(raw) || type.name().equals(raw)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
     @JsonValue
     public String getValue() {
         return value;

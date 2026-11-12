@@ -25,8 +25,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
      */
     @Query("SELECT a FROM Appointment a WHERE a.patientId = :patientId AND a.status <> AppointmentStatusEnum.CANCELLED AND a.appointmentDate >= :from AND a.appointmentDate <= :to")
     List<Appointment> findActiveByPatientAndDateRange(@Param("patientId") Long patientId,
-                                                       @Param("from") LocalDate from,
-                                                       @Param("to") LocalDate to);
+                                                      @Param("from") LocalDate from,
+                                                      @Param("to") LocalDate to);
 
     List<Appointment> findByAvailabilityRuleId(Long ruleId);
 
@@ -80,12 +80,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     int updateDoctorSnapshotByUserId(@Param("userId") Long userId, @Param("name") String name, @Param("email") String email);
 
     /**
-     * Refreshes doctor display snapshots for appointments tied to a doctor profile id.
+     * Refreshes doctor display snapshots for a doctor profile.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Appointment a set a.doctorName = :name, a.doctorEmail = :email, a.doctorSpecializationId = :specializationId where a.doctorId = :doctorId")
+    @Query("""
+            update Appointment a
+            set a.doctorName = :name,
+                a.doctorEmail = :email,
+                a.doctorSpecializationId = :specializationId,
+                a.doctorSpecializationName = :specializationName
+            where a.doctorId = :doctorId
+            """)
     int updateDoctorSnapshotByDoctorId(@Param("doctorId") Long doctorId,
                                        @Param("name") String name,
                                        @Param("email") String email,
-                                       @Param("specializationId") Long specializationId);
+                                       @Param("specializationId") Long specializationId,
+                                       @Param("specializationName") String specializationName);
 }

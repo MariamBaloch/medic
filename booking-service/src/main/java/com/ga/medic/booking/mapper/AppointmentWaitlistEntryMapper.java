@@ -37,9 +37,10 @@ public interface AppointmentWaitlistEntryMapper {
     List<AppointmentWaitlistEntryResponse> toResponseList(List<AppointmentWaitlistEntry> entries);
 
     default SpecializationResponse specializationFromSnapshot(AppointmentWaitlistEntry entry) {
-        if (entry.getDoctorSpecializationId() == null) {
+        if (entry.getDoctorSpecializationId() == null
+                && (entry.getDoctorSpecializationName() == null || entry.getDoctorSpecializationName().isBlank())) {
             return null;
         }
-        return new SpecializationResponse(entry.getDoctorSpecializationId(), null, null);
+        return new SpecializationResponse(entry.getDoctorSpecializationId(), entry.getDoctorSpecializationName(), null);
     }
 }

@@ -79,11 +79,14 @@ class IdentityEventProcessorTest {
                         "doctorId", 7,
                         "doctorName", "Dr House",
                         "doctorEmail", "house@medic.com",
-                        "doctorSpecializationId", 3
+                        "doctorSpecializationId", 3,
+                        "doctorSpecializationName", "Cardiology"
                 )
         ));
 
-        verify(appointmentRepository).updateDoctorSnapshotByDoctorId(eq(7L), eq("Dr House"), eq("house@medic.com"), eq(3L));
-        verify(waitlistEntryRepository).updateDoctorSnapshotByDoctorId(eq(7L), eq("Dr House"), eq("house@medic.com"), eq(3L));
+        verify(appointmentRepository).updateDoctorSnapshotByDoctorId(
+                eq(7L), eq("Dr House"), eq("house@medic.com"), eq(3L), eq("Cardiology"));
+        verify(waitlistEntryRepository).updateDoctorSnapshotByDoctorId(
+                eq(7L), eq("Dr House"), eq("house@medic.com"), eq(3L), eq("Cardiology"));
     }
 }

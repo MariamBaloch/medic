@@ -82,12 +82,15 @@ public class IdentityEventProcessor {
         String name = stringValue(payload.get("doctorName"));
         String email = stringValue(payload.get("doctorEmail"));
         Long specializationId = longValue(payload.get("doctorSpecializationId"));
+        String specializationName = stringValue(payload.get("doctorSpecializationName"));
         if (doctorId == null || name == null || name.isBlank() || email == null || email.isBlank()) {
             throw new IllegalArgumentException("identity.doctor payload missing doctorId/doctorName/doctorEmail");
         }
 
-        int appointments = appointmentRepository.updateDoctorSnapshotByDoctorId(doctorId, name, email, specializationId);
-        int waitlist = waitlistEntryRepository.updateDoctorSnapshotByDoctorId(doctorId, name, email, specializationId);
+        int appointments = appointmentRepository.updateDoctorSnapshotByDoctorId(
+                doctorId, name, email, specializationId, specializationName);
+        int waitlist = waitlistEntryRepository.updateDoctorSnapshotByDoctorId(
+                doctorId, name, email, specializationId, specializationName);
         log.info(
                 "Refreshed booking doctor snapshots from {}: doctorId={}, appointments={}, waitlist={}",
                 EventTypes.IDENTITY_DOCTOR_UPDATED,

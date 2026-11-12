@@ -21,7 +21,9 @@ import com.ga.medic.booking.model.*;
 import com.ga.medic.booking.repository.AppointmentRepository;
 import com.ga.medic.booking.repository.AvailabilityRuleRepository;
 import com.ga.medic.booking.client.InternalIdentityClient;
+import com.ga.medic.common.contract.InternalDoctorProfileResponse;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.security.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
@@ -117,8 +119,8 @@ public class AppointmentService {
             throw new ForbiddenActionException("You can only view appointments you are associated with");
         }
 
-        InternalDoctorSnapshotResponse doctor = internalIdentityClient.getDoctorSnapshot(appointment.getDoctorId());
-        InternalPatientSnapshotResponse patient = internalIdentityClient.getPatientSnapshot(appointment.getPatientId());
+        InternalDoctorProfileResponse doctor = internalIdentityClient.getDoctorProfile(appointment.getDoctorId());
+        InternalPatientProfileResponse patient = internalIdentityClient.getPatientProfile(appointment.getPatientId());
         return appointmentMapper.toDetailResponse(appointment, doctor, patient);
     }
 

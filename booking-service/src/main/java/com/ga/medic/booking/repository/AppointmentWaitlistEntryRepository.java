@@ -83,12 +83,20 @@ public interface AppointmentWaitlistEntryRepository extends JpaRepository<Appoin
     int updateDoctorSnapshotByUserId(@Param("userId") Long userId, @Param("name") String name, @Param("email") String email);
 
     /**
-     * Refreshes doctor display snapshots for waitlist rows tied to a doctor profile id.
+     * Refreshes doctor display snapshots for a doctor profile.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update AppointmentWaitlistEntry e set e.doctorName = :name, e.doctorEmail = :email, e.doctorSpecializationId = :specializationId where e.doctorId = :doctorId")
+    @Query("""
+            update AppointmentWaitlistEntry e
+            set e.doctorName = :name,
+                e.doctorEmail = :email,
+                e.doctorSpecializationId = :specializationId,
+                e.doctorSpecializationName = :specializationName
+            where e.doctorId = :doctorId
+            """)
     int updateDoctorSnapshotByDoctorId(@Param("doctorId") Long doctorId,
                                        @Param("name") String name,
                                        @Param("email") String email,
-                                       @Param("specializationId") Long specializationId);
+                                       @Param("specializationId") Long specializationId,
+                                       @Param("specializationName") String specializationName);
 }

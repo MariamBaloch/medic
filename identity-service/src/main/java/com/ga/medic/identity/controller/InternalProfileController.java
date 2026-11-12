@@ -1,6 +1,8 @@
 package com.ga.medic.identity.controller;
 
+import com.ga.medic.common.contract.InternalDoctorProfileResponse;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.identity.service.InternalProfileService;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +24,18 @@ public class InternalProfileController {
         return ResponseEntity.ok(internalProfileService.getPatientSnapshot(id));
     }
 
+    @GetMapping("/patients/{id}/profile")
+    public ResponseEntity<InternalPatientProfileResponse> getPatientProfile(@PathVariable Long id) {
+        return ResponseEntity.ok(internalProfileService.getPatientProfile(id));
+    }
+
     @GetMapping("/doctors/{id}")
     public ResponseEntity<InternalDoctorSnapshotResponse> getDoctor(@PathVariable Long id) {
         return ResponseEntity.ok(internalProfileService.getDoctorSnapshot(id));
+    }
+
+    @GetMapping("/doctors/{id}/profile")
+    public ResponseEntity<InternalDoctorProfileResponse> getDoctorProfile(@PathVariable Long id) {
+        return ResponseEntity.ok(internalProfileService.getDoctorProfile(id));
     }
 }

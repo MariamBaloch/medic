@@ -48,6 +48,9 @@ public class Appointment extends Auditable {
     @Column(name = "doctor_specialization_id")
     private Long doctorSpecializationId;
 
+    @Column(name = "doctor_specialization_name", length = 100)
+    private String doctorSpecializationName;
+
     @Column(nullable = false)
     private LocalDate appointmentDate;
 
@@ -90,5 +93,6 @@ public class Appointment extends Auditable {
         this.doctorName = doctor.doctorName();
         this.doctorEmail = doctor.doctorEmail();
         this.doctorSpecializationId = doctor.doctorSpecializationId();
+        this.doctorSpecializationName = doctor.doctorSpecializationName();
     }
 }

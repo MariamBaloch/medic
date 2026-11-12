@@ -34,7 +34,9 @@ public class IdentityEventPayloadMapper {
         map.put("doctorUserId", doctor.getUser().getId());
         map.put("doctorName", doctor.getUser().getFullName());
         map.put("doctorEmail", doctor.getUser().getEmail());
-        map.put("doctorSpecializationId", doctor.getSpecialization().getId());
+        var specialization = doctor.getSpecialization();
+        map.put("doctorSpecializationId", specialization == null ? null : specialization.getId());
+        map.put("doctorSpecializationName", specialization == null ? null : specialization.getName());
         map.put("isVerified", doctor.getIsVerified());
         return map;
     }

@@ -46,6 +46,9 @@ public class AppointmentWaitlistEntry extends Auditable {
     @Column(name = "doctor_specialization_id")
     private Long doctorSpecializationId;
 
+    @Column(name = "doctor_specialization_name", length = 100)
+    private String doctorSpecializationName;
+
     @Column(name = "appointment_date", nullable = false)
     private LocalDate appointmentDate;
 
@@ -79,5 +82,6 @@ public class AppointmentWaitlistEntry extends Auditable {
         this.doctorName = doctor.doctorName();
         this.doctorEmail = doctor.doctorEmail();
         this.doctorSpecializationId = doctor.doctorSpecializationId();
+        this.doctorSpecializationName = doctor.doctorSpecializationName();
     }
 }

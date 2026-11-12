@@ -19,7 +19,7 @@ public final class IdentityTestData {
             long doctorId, long doctorUserId, String name, String email,
             long specializationId, BigDecimal consultationFee) {
         return new InternalDoctorSnapshotResponse(
-                doctorId, doctorUserId, name, email, specializationId, consultationFee);
+                doctorId, doctorUserId, name, email, specializationId, "Cardiology", consultationFee);
     }
 
     public static InternalDoctorSnapshotResponse seedDoctorOne() {

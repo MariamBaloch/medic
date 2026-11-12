@@ -11,6 +11,7 @@ public record InternalDoctorSnapshotResponse(
         String doctorName,
         String doctorEmail,
         Long doctorSpecializationId,
+        String doctorSpecializationName,
         BigDecimal consultationFee
 ) {
 }

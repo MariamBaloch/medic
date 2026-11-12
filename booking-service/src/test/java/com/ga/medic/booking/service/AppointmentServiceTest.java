@@ -1,7 +1,9 @@
 package com.ga.medic.booking.service;
 
 import com.ga.medic.booking.client.InternalIdentityClient;
+import com.ga.medic.common.contract.InternalDoctorProfileResponse;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.booking.dto.request.AppointmentBookingRequest;
 import com.ga.medic.booking.dto.request.CancelAppointmentRequest;
@@ -242,6 +244,19 @@ public class AppointmentServiceTest {
                 new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
     }
 
+    private InternalDoctorProfileResponse doctorProfile() {
+        return new InternalDoctorProfileResponse(
+                doctor.doctorId(), doctor.doctorName(), null, "MBBS",
+                doctor.doctorSpecializationId(), doctor.doctorSpecializationName(), null,
+                10, "City Hospital", "Clinic 1", "LIC-1", "Bio");
+    }
+
+    private InternalPatientProfileResponse patientProfile() {
+        return new InternalPatientProfileResponse(
+                patient.patientId(), patient.patientName(), null,
+                null, null, null, null, null, null, null, null);
+    }
+
     private Appointment createBookedAppointment(
             Long appointmentId, InternalPatientSnapshotResponse owner, Long version) {
         Appointment appointment = new Appointment();
@@ -261,7 +276,11 @@ public class AppointmentServiceTest {
         Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
         AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
+        InternalDoctorProfileResponse doctorProfile = doctorProfile();
+        InternalPatientProfileResponse patientProfile = patientProfile();
+        when(internalIdentityClient.getDoctorProfile(doctor.doctorId())).thenReturn(doctorProfile);
+        when(internalIdentityClient.getPatientProfile(patient.patientId())).thenReturn(patientProfile);
+        when(appointmentMapper.toDetailResponse(appointment, doctorProfile, patientProfile)).thenReturn(response);
 
         assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
     }
@@ -273,7 +292,11 @@ public class AppointmentServiceTest {
         AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
         when(authenticatedUser.getUserId()).thenReturn(2L);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
+        InternalDoctorProfileResponse doctorProfile = doctorProfile();
+        InternalPatientProfileResponse patientProfile = patientProfile();
+        when(internalIdentityClient.getDoctorProfile(doctor.doctorId())).thenReturn(doctorProfile);
+        when(internalIdentityClient.getPatientProfile(patient.patientId())).thenReturn(patientProfile);
+        when(appointmentMapper.toDetailResponse(appointment, doctorProfile, patientProfile)).thenReturn(response);
 
         assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
     }
