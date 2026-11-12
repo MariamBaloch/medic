@@ -4,8 +4,6 @@ server:
 spring:
   application:
     name: gateway-service
-  profiles:
-    active: ${SPRING_PROFILE:dev}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
