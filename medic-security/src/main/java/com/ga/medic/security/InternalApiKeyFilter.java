@@ -22,7 +22,7 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Internal-Key";
 
-    @Value("${app.internal-api-key}")
+    @Value("${app.internal-api-key:}")
     private String internalApiKey;
 
     private static boolean keysMatch(String expected, String provided) {

@@ -1,0 +1,314 @@
+package com.ga.medic.booking.service;
+
+import com.ga.medic.booking.client.InternalIdentityClient;
+import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
+import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
+import com.ga.medic.booking.dto.request.AppointmentBookingRequest;
+import com.ga.medic.booking.dto.request.CancelAppointmentRequest;
+import com.ga.medic.booking.dto.request.RescheduleAppointmentRequest;
+import com.ga.medic.booking.dto.response.AppointmentDetailResponse;
+import com.ga.medic.booking.dto.response.AvailableSlotResponse;
+import com.ga.medic.booking.enums.AppointmentStatusEnum;
+import com.ga.medic.booking.exception.ForbiddenActionException;
+import com.ga.medic.booking.exception.InformationNotFoundException;
+import com.ga.medic.booking.exception.SlotNotAvailableException;
+import com.ga.medic.booking.mapper.AppointmentMapper;
+import com.ga.medic.booking.mapper.OutboxPayloadMapper;
+import com.ga.medic.web.PageMapper;
+import com.ga.medic.messaging.outbox.OutboxService;
+import com.ga.medic.booking.model.Appointment;
+import com.ga.medic.booking.model.AvailabilityRule;
+import com.ga.medic.booking.repository.AppointmentRepository;
+import com.ga.medic.booking.repository.AvailabilityRuleRepository;
+import com.ga.medic.security.AuthenticatedUser;
+import com.ga.medic.booking.support.IdentityTestData;
+import jakarta.persistence.EntityManager;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class AppointmentServiceTest {
+
+    private final LocalDate DATE = LocalDate.now().plusDays(1);
+    private final LocalTime START = LocalTime.of(9, 0);
+    private final LocalTime END = LocalTime.of(9, 30);
+
+    @Mock
+    private AppointmentRepository appointmentRepository;
+    @Mock
+    private InternalIdentityClient internalIdentityClient;
+    @Mock
+    private AvailabilityRuleRepository availabilityRuleRepository;
+    @Mock
+    private AvailabilityRuleService availabilityRuleService;
+    @Mock
+    private AppointmentMapper appointmentMapper;
+    @Mock
+    private AuthenticatedUser authenticatedUser;
+    @Mock
+    private PageMapper pageMapper;
+    @Mock
+    private OutboxService outboxService;
+    @Mock
+    private OutboxPayloadMapper outboxPayloadMapper;
+    @Mock
+    private AppointmentSlotLockService slotLockService;
+    @Mock
+    private AppointmentWaitlistService waitlistService;
+    @Mock
+    private EntityManager entityManager;
+    @InjectMocks
+    private AppointmentService appointmentService;
+
+    private InternalPatientSnapshotResponse patient;
+    private InternalDoctorSnapshotResponse doctor;
+
+    @Before
+    public void setUp() {
+        patient = IdentityTestData.patient(1L, 1L, "Patient User", "patient@test.local");
+        doctor = IdentityTestData.doctor(
+                2L, 2L, "Doctor User", "doctor@test.local", 1L, BigDecimal.valueOf(100));
+
+        when(authenticatedUser.requirePatientId()).thenReturn(1L);
+        when(authenticatedUser.getUserId()).thenReturn(1L);
+        when(internalIdentityClient.getPatientSnapshot(1L)).thenReturn(patient);
+        when(internalIdentityClient.getDoctorSnapshot(2L)).thenReturn(doctor);
+        ReflectionTestUtils.setField(appointmentService, "entityManager", entityManager);
+    }
+
+    @Test(expected = InformationNotFoundException.class)
+    public void bookAppointment_shouldThrow_whenDoctorNotFound() {
+        AppointmentBookingRequest request = mock(AppointmentBookingRequest.class);
+        when(request.doctorId()).thenReturn(99L);
+        when(internalIdentityClient.getDoctorSnapshot(99L))
+                .thenThrow(new InformationNotFoundException("Doctor profile not found"));
+
+        appointmentService.bookAppointment(request);
+    }
+
+    @Test(expected = SlotNotAvailableException.class)
+    public void bookAppointment_shouldThrow_whenNoMatchingSlot() {
+        AppointmentBookingRequest request = mock(AppointmentBookingRequest.class);
+        when(request.doctorId()).thenReturn(2L);
+        when(request.date()).thenReturn(DATE);
+        when(request.startTime()).thenReturn(START);
+        when(availabilityRuleService.getAvailability(any(), any(), any())).thenReturn(List.of());
+
+        appointmentService.bookAppointment(request);
+    }
+
+    @Test
+    public void bookAppointment_shouldSave_whenValid() {
+        AppointmentBookingRequest request = mock(AppointmentBookingRequest.class);
+        when(request.doctorId()).thenReturn(2L);
+        when(request.date()).thenReturn(DATE);
+        when(request.startTime()).thenReturn(START);
+        AvailableSlotResponse slot = new AvailableSlotResponse(1L, DATE, START, END, 30);
+        Appointment appointment = new Appointment();
+
+        when(availabilityRuleService.getAvailability(any(), any(), any())).thenReturn(List.of(slot));
+        when(availabilityRuleRepository.findById(1L)).thenReturn(Optional.of(new AvailabilityRule()));
+        when(appointmentRepository.existsOverlappingForPatient(any(), any(), any(), any())).thenReturn(false);
+        when(appointmentRepository.existsActiveByDoctorAndSlot(any(), any(), any())).thenReturn(false);
+        when(appointmentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(appointment)).thenReturn(appointment);
+
+        appointmentService.bookAppointment(request);
+
+        verify(slotLockService).acquirePatient(1L);
+        verify(internalIdentityClient).getPatientSnapshot(1L);
+        verify(internalIdentityClient).getDoctorSnapshot(2L);
+        verify(appointmentRepository).saveAndFlush(appointment);
+    }
+
+    @Test
+    public void rescheduleAppointment_shouldUpdateExistingAppointment_whenTargetSlotIsAvailable() {
+        Long appointmentId = 10L;
+        LocalDate newDate = DATE.plusDays(1);
+        LocalTime newStartTime = LocalTime.of(10, 0);
+        LocalTime newEndTime = LocalTime.of(10, 30);
+        AvailabilityRule targetRule = new AvailabilityRule();
+        targetRule.setId(3L);
+
+        Appointment appointment = new Appointment();
+        appointment.setId(appointmentId);
+        appointment.applyPartySnapshots(patient, doctor);
+        appointment.setAvailabilityRuleId(1L);
+        appointment.setAppointmentDate(DATE);
+        appointment.setStartTime(START);
+        appointment.setEndTime(END);
+        appointment.setStatus(AppointmentStatusEnum.BOOKED);
+        appointment.setVersion(0L);
+
+        AvailableSlotResponse targetSlot = new AvailableSlotResponse(
+                targetRule.getId(), newDate, newStartTime, newEndTime, 30);
+        RescheduleAppointmentRequest request = new RescheduleAppointmentRequest(newDate, newStartTime, 0L);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(availabilityRuleService.getAvailability(doctor.doctorId(), newDate, newDate, appointmentId))
+                .thenReturn(List.of(targetSlot));
+        when(appointmentRepository.existsOverlappingForPatientExcludingAppointment(
+                patient.patientId(), newDate, newStartTime, newEndTime, appointmentId)).thenReturn(false);
+        when(availabilityRuleRepository.findById(targetRule.getId())).thenReturn(Optional.of(targetRule));
+        when(appointmentRepository.saveAndFlush(appointment)).thenReturn(appointment);
+
+        appointmentService.rescheduleAppointment(appointmentId, request);
+
+        assertEquals(newDate, appointment.getAppointmentDate());
+        assertEquals(newStartTime, appointment.getStartTime());
+        assertEquals(newEndTime, appointment.getEndTime());
+        assertEquals(targetRule.getId(), appointment.getAvailabilityRuleId());
+        verify(appointmentRepository).saveAndFlush(appointment);
+        verify(outboxService).append(anyString(), eq("appointment"), eq(String.valueOf(appointmentId)), any());
+    }
+
+    @Test(expected = SlotNotAvailableException.class)
+    public void rescheduleAppointment_shouldKeepOriginalSlot_whenTargetIsUnavailable() {
+        Long appointmentId = 10L;
+        LocalDate targetDate = DATE.plusDays(1);
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        LocalDate originalDate = appointment.getAppointmentDate();
+        LocalTime originalStartTime = appointment.getStartTime();
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(availabilityRuleService.getAvailability(doctor.doctorId(), targetDate, targetDate, appointmentId))
+                .thenReturn(List.of());
+
+        try {
+            appointmentService.rescheduleAppointment(
+                    appointmentId,
+                    new RescheduleAppointmentRequest(targetDate, LocalTime.of(10, 0), 0L));
+        } finally {
+            assertEquals(originalDate, appointment.getAppointmentDate());
+            assertEquals(originalStartTime, appointment.getStartTime());
+            verify(appointmentRepository, never()).saveAndFlush(any());
+        }
+    }
+
+    @Test(expected = ForbiddenActionException.class)
+    public void rescheduleAppointment_shouldRejectAppointmentOwnedByAnotherPatient() {
+        Long appointmentId = 10L;
+        InternalPatientSnapshotResponse otherPatient = IdentityTestData.patient(
+                2L, 99L, "Other Patient", "other@test.local");
+
+        Appointment appointment = createBookedAppointment(appointmentId, otherPatient, 0L);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rescheduleAppointment_shouldRejectCancelledAppointment() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        appointment.setStatus(AppointmentStatusEnum.CANCELLED);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    @Test(expected = ObjectOptimisticLockingFailureException.class)
+    public void rescheduleAppointment_shouldRejectStaleVersion() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 1L);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.rescheduleAppointment(
+                appointmentId,
+                new RescheduleAppointmentRequest(DATE.plusDays(1), LocalTime.of(10, 0), 0L));
+    }
+
+    private Appointment createBookedAppointment(
+            Long appointmentId, InternalPatientSnapshotResponse owner, Long version) {
+        Appointment appointment = new Appointment();
+        appointment.setId(appointmentId);
+        appointment.applyPartySnapshots(owner, doctor);
+        appointment.setAppointmentDate(DATE);
+        appointment.setStartTime(START);
+        appointment.setEndTime(END);
+        appointment.setStatus(AppointmentStatusEnum.BOOKED);
+        appointment.setVersion(version);
+        return appointment;
+    }
+
+    @Test
+    public void getAppointmentDetails_shouldAllowOwningPatient() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
+
+        assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
+    }
+
+    @Test
+    public void getAppointmentDetails_shouldAllowOwningDoctor() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        AppointmentDetailResponse response = mock(AppointmentDetailResponse.class);
+        when(authenticatedUser.getUserId()).thenReturn(2L);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentMapper.toDetailResponse(appointment, doctor, patient)).thenReturn(response);
+
+        assertSame(response, appointmentService.getAppointmentDetails(appointmentId));
+    }
+
+    @Test(expected = ForbiddenActionException.class)
+    public void getAppointmentDetails_shouldRejectUnrelatedUser() {
+        Long appointmentId = 10L;
+        Appointment appointment = createBookedAppointment(appointmentId, patient, 0L);
+        when(authenticatedUser.getUserId()).thenReturn(99L);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        appointmentService.getAppointmentDetails(appointmentId);
+    }
+
+    @Test(expected = InformationNotFoundException.class)
+    public void cancelAppointment_shouldThrow_whenNotFound() {
+        when(appointmentRepository.findById(99L)).thenReturn(Optional.empty());
+
+        appointmentService.cancelAppointment(99L, new CancelAppointmentRequest("reason"));
+    }
+
+    @Test
+    public void cancelAppointment_shouldSetStatusCancelled_whenValid() {
+        Appointment appointment = new Appointment();
+        appointment.applyPartySnapshots(patient, doctor);
+        appointment.setStatus(AppointmentStatusEnum.BOOKED);
+        appointment.setAppointmentDate(DATE);
+        appointment.setStartTime(START);
+
+        when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.cancelAppointment(1L, new CancelAppointmentRequest("reason"));
+
+        assertEquals(AppointmentStatusEnum.CANCELLED, appointment.getStatus());
+        verify(appointmentRepository).saveAndFlush(appointment);
+    }
+}

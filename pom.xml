@@ -21,7 +21,7 @@
         <module>medic-security</module>
         <module>medic-messaging</module>
         <module>medic-web</module>
-        <module>medic-monolith</module>
+        <module>booking-service</module>
         <module>gateway-service</module>
         <module>notification-service</module>
         <module>audit-service</module>

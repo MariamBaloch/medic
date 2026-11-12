@@ -1,0 +1,117 @@
+package com.ga.medic.booking.controller;
+
+import com.ga.medic.booking.annotation.AuditLogger;
+import com.ga.medic.booking.dto.request.*;
+import com.ga.medic.booking.dto.response.AppointmentResponse;
+import com.ga.medic.booking.dto.response.AppointmentStatusCountsResponse;
+import com.ga.medic.booking.dto.response.DoctorAvailabilityResponse;
+import com.ga.medic.web.dto.PageResponse;
+import com.ga.medic.booking.enums.AuditAction;
+import com.ga.medic.booking.enums.AuditEntityType;
+import com.ga.medic.booking.service.AppointmentService;
+import com.ga.medic.booking.service.AvailabilityRuleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@RestController
+@RequestMapping("/patient/appointments")
+@Tag(name = "Patient > Appointments", description = "Patient appointment booking and management")
+@SecurityRequirement(name = "bearerAuth")
+@RequiredArgsConstructor
+@PreAuthorize("hasRole('PATIENT')")
+public class PatientAppointmentController {
+    private final AppointmentService appointmentService;
+    private final AvailabilityRuleService availabilityRuleService;
+
+    @GetMapping
+    @Operation(summary = "Get my appointments",
+            description = "Lists the authenticated patient's appointments with optional doctor-name, date-range, status, and specialization filters.")
+    public ResponseEntity<PageResponse<AppointmentResponse>> getMyAppointments(
+            @Parameter(description = "Case-insensitive partial match against the doctor's full name")
+            @RequestParam(required = false) String doctorName,
+            @ParameterObject AppointmentFilterRequest filters,
+            @ParameterObject @PageableDefault(sort = {"appointmentDate", "startTime"}, direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(appointmentService.getPatientAppointments(doctorName, filters, pageable));
+    }
+
+    @GetMapping("/status-counts")
+    @Operation(summary = "Get my appointment counts by status",
+            description = "Counts the authenticated patient's appointments by status, with optional doctor-name, date-range, and specialization filters.")
+    public ResponseEntity<AppointmentStatusCountsResponse> getMyAppointmentStatusCounts(
+            @Parameter(description = "Case-insensitive partial match against the doctor's full name")
+            @RequestParam(required = false) String doctorName,
+            @ParameterObject AppointmentStatusCountFilterRequest filters) {
+        return ResponseEntity.ok(appointmentService.getPatientAppointmentStatusCounts(doctorName, filters));
+    }
+
+    @PostMapping
+    @Operation(summary = "Book an appointment",
+            description = "Book an appointment with a doctor. The system validates the slot is truly available against current rules and prevents double-booking.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Appointment booked"),
+            @ApiResponse(responseCode = "400", description = "Invalid booking request or appointment data"),
+            @ApiResponse(responseCode = "403", description = "Patient role required"),
+            @ApiResponse(responseCode = "409", description = "Slot is unavailable, overlaps a patient booking, or was claimed concurrently")
+    })
+    @AuditLogger(action = AuditAction.BOOK, entityType = AuditEntityType.APPOINTMENT, description = "Patient booked an appointment")
+    public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentBookingRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(appointmentService.bookAppointment(request));
+    }
+
+    @PutMapping("/{appointmentId}/reschedule")
+    @Operation(summary = "Reschedule an appointment",
+            description = "Moves the authenticated patient's future booked appointment to another currently available slot with the same doctor. The request must include the appointment version last read by the patient.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment rescheduled"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or appointment cannot be rescheduled"),
+            @ApiResponse(responseCode = "403", description = "Appointment belongs to another patient"),
+            @ApiResponse(responseCode = "404", description = "Appointment or patient profile not found"),
+            @ApiResponse(responseCode = "409", description = "Version is stale or target slot is unavailable")
+    })
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.APPOINTMENT,
+            description = "Patient rescheduled an appointment")
+    public ResponseEntity<AppointmentResponse> rescheduleAppointment(
+            @Parameter(description = "Appointment ID") @PathVariable Long appointmentId,
+            @Valid @RequestBody RescheduleAppointmentRequest request
+    ) {
+        return ResponseEntity.ok(appointmentService.rescheduleAppointment(appointmentId, request));
+    }
+
+    @Operation(summary = "Cancel an appointment",
+            description = "Cancel an appointment. The freed slot reappears automatically if the current rules still produce it.")
+    @PutMapping("/{id}/cancel")
+    @AuditLogger(action = AuditAction.CANCEL, entityType = AuditEntityType.APPOINTMENT, description = "Patient cancelled an appointment")
+    public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable Long id, @Valid @RequestBody CancelAppointmentRequest request) {
+        return ResponseEntity.ok(appointmentService.cancelAppointment(id, request));
+    }
+
+    @Operation(summary = "Get doctor availability",
+            description = "Returns all valid scheduled future slots in the requested date range, including booked slots and dates where every slot is booked. Each slot has status AVAILABLE, BOOKED, or WAITLIST_OFFERED and patient-specific waitlist eligibility fields.")
+    @GetMapping("/doctors/{doctorId}/availability")
+    public ResponseEntity<DoctorAvailabilityResponse> getDoctorAvailability(
+            @PathVariable Long doctorId,
+            @Parameter(description = "Start date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate from,
+            @Parameter(description = "End date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate to) {
+        return ResponseEntity.ok(availabilityRuleService.getAvailabilityForPatient(doctorId, from, to));
+    }
+}

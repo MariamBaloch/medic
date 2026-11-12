@@ -41,7 +41,7 @@ spring:
               filters:
                 - StripPrefix=2
             - id: booking
-              uri: ${MONOLITH_URL:http://localhost:8081}
+              uri: ${BOOKING_URL:http://localhost:8081}
               predicates:
                 - Path=/api/booking/**
               filters:

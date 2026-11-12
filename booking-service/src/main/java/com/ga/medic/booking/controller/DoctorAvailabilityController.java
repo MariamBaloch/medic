@@ -1,0 +1,88 @@
+package com.ga.medic.booking.controller;
+
+
+import com.ga.medic.booking.annotation.AuditLogger;
+import com.ga.medic.booking.dto.request.AvailabilityRuleRequest;
+import com.ga.medic.booking.dto.response.*;
+import com.ga.medic.booking.enums.AuditAction;
+import com.ga.medic.booking.enums.AuditEntityType;
+import com.ga.medic.booking.service.AvailabilityRuleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@RestController
+@RequestMapping("/doctors/availability")
+@Tag(name = "Doctor > Availability", description = "Doctor availability rules and calendar")
+@SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasRole('DOCTOR')")
+@RequiredArgsConstructor
+public class DoctorAvailabilityController {
+
+    private final AvailabilityRuleService availabilityRuleService;
+
+    @Operation(summary = "List availability rules",
+            description = "List current and future availability rules")
+    @GetMapping("/rules")
+    public ResponseEntity<List<AvailabilityRuleResponse>> listRules() {
+        return ResponseEntity.ok(availabilityRuleService.listRules());
+    }
+
+    @Operation(summary = "Create availability rule",
+            description = "Create a new availability rule defining the doctor's working schedule")
+    @PostMapping("/rules")
+    @AuditLogger(action = AuditAction.CREATE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor created an availability rule")
+    public ResponseEntity<AvailabilityRuleUpdateResponse> createRule(@Valid @RequestBody AvailabilityRuleRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(availabilityRuleService.createRule(request));
+    }
+
+    @Operation(summary = "Update availability rule",
+            description = "Update the rule identified by the path ID. A rule whose start date is in the future is updated in place and keeps its ID. If the rule has already started (its start date is today or earlier), it is closed the day before the requested start date and a replacement rule is created. In that case, the response's `rule.id` is the replacement rule's ID; use that ID for any later update or delete request.")
+    @PutMapping("/rules/{id}")
+    @AuditLogger(action = AuditAction.UPDATE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor updated an availability rule")
+    public ResponseEntity<AvailabilityRuleUpdateResponse> updateRule(
+            @Parameter(description = "ID of the existing availability rule to update", example = "1")
+            @PathVariable Long id,
+            @Valid @RequestBody AvailabilityRuleRequest request) {
+        return ResponseEntity.ok(availabilityRuleService.updateRule(id, request));
+    }
+
+    @Operation(summary = "Delete availability rule",
+            description = "Delete a rule. Hard-deletes rules that haven't started, soft-deletes (sets endDate to yesterday) active rules.")
+    @DeleteMapping("/rules/{id}")
+    @AuditLogger(action = AuditAction.DELETE, entityType = AuditEntityType.AVAILABILITY_RULE, description = "Doctor deleted an availability rule")
+    public ResponseEntity<AvailabilityRuleDeleteResponse> deleteRule(@PathVariable Long id) {
+        return ResponseEntity.ok(availabilityRuleService.deleteRule(id));
+    }
+
+    @Operation(summary = "Get doctor calendar",
+            description = "Returns available slots (computed from rules) and booked appointments for the date range")
+    @GetMapping("/calendar")
+    public ResponseEntity<DoctorCalendarResponse> getCalendar(
+            @Parameter(description = "Start date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate from,
+            @Parameter(description = "End date (dd/MM/yyyy)", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate to) {
+        return ResponseEntity.ok(availabilityRuleService.getCalendar(from, to));
+    }
+
+    @Operation(summary = "Get one day's availability ranges",
+            description = "Returns contiguous open-time ranges for the authenticated doctor. Times include machine-readable 24-hour values and display labels such as 1:00 PM - 2:00 PM.")
+    @GetMapping("/day")
+    public ResponseEntity<DoctorDailyAvailabilityResponse> getDailyAvailability(
+            @Parameter(description = "Availability date (dd/MM/yyyy)", example = "25/10/2026", required = true)
+            @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") LocalDate date) {
+        return ResponseEntity.ok(availabilityRuleService.getDailyAvailabilityForAuthenticatedDoctor(date));
+    }
+}
