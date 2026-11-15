@@ -5,13 +5,14 @@ conflicting appointments. Database constraints provide an extra safeguard if req
 
 ## Booking and Rescheduling
 
-Before checking for overlapping appointments, booking and rescheduling lock the patient's database row using
-`PESSIMISTIC_WRITE`. If the same patient sends two requests at once, one must wait for the other to finish before
-checking the latest data.
+Before checking for overlapping appointments, booking, rescheduling, cancellation, and waitlist mutations acquire a
+PostgreSQL transaction-level advisory lock keyed as `patient-booking:{patientId}`. If the same patient sends two
+requests at once, one must wait for the other to finish before loading the latest data.
 
-Medic also locks the specific doctor, date, and start time using a PostgreSQL transaction-level advisory lock. Requests
-for the same slot must wait for one another, while requests for different slots can proceed independently. Rescheduling
-locks both the old and new slots in a consistent order to reduce deadlocks. These locks require an active transaction.
+Medic then locks the specific doctor, date, and start time using another advisory lock
+(`appointment-slot:{doctorId}:{date}:{startTime}`). Requests for the same slot must wait for one another, while
+requests for different slots can proceed independently. Rescheduling locks both the old and new slots in a consistent
+order to reduce deadlocks. Patient locks are acquired before slot locks.
 
 Before booking, the service checks the doctor's schedule, whether a waitlist offer reserves the slot, whether another
 appointment already occupies it, and whether the patient has an overlapping appointment with another doctor. This
