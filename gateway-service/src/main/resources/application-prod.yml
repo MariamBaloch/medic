@@ -1,0 +1,60 @@
+server:
+  forward-headers-strategy: framework
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+  web:
+    error:
+      include-stacktrace: never
+      include-message: never
+      include-binding-errors: never
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: identity
+              uri: ${IDENTITY_URL}
+              predicates:
+                - Path=/api/identity/**
+              filters:
+                - StripPrefix=2
+            - id: notification
+              uri: ${NOTIFICATION_URL}
+              predicates:
+                - Path=/api/notification,/api/notification/**
+              filters:
+                - StripPrefix=2
+            - id: audit
+              uri: ${AUDIT_URL}
+              predicates:
+                - Path=/api/audit,/api/audit/**
+              filters:
+                - StripPrefix=2
+            - id: booking
+              uri: ${BOOKING_URL}
+              predicates:
+                - Path=/api/booking/**
+              filters:
+                - StripPrefix=2
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.ga.medic: INFO
