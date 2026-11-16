@@ -1,0 +1,275 @@
+name: medic
+
+x-common-env: &common-env
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+x-mail-env: &mail-env
+  MAIL_HOST: mailpit
+  MAIL_PORT: 1025
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+  MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      MEDIC_DB_PASSWORD: ${MEDIC_DB_PASSWORD:?MEDIC_DB_PASSWORD is required}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?BOOKING_DB_PASSWORD is required}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.1
+    hostname: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  kafka-init:
+    image: apache/kafka:3.8.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./docker/kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: [ "/bin/sh", "/create-topics.sh" ]
+    restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    profiles: [ "ui" ]
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "${KAFKA_UI_PORT:-8088}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: medic
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking-service/Dockerfile
+    image: booking-service:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      SERVER_PORT: 8081
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      PUBLIC_BASE_PATH: /api/booking
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Bahrain}
+      BOOKING_DB_URL: jdbc:postgresql://postgres:5432/medic
+      BOOKING_DB_USERNAME: medic_booking
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?BOOKING_DB_PASSWORD is required}
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+      IDENTITY_URL: http://identity-service:8082
+      APP_OUTBOX_PUBLISHER_ENABLED: "true"
+    ports:
+      - "${BOOKING_PORT:-8081}:8081"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    image: notification-service:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    environment:
+      <<: [ *common-env, *mail-env ]
+      SERVER_PORT: 8084
+      NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/medic
+      NOTIFICATION_DB_USERNAME: medic_notification
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}
+    ports:
+      - "${NOTIFICATION_PORT:-8084}:8084"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8084/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: identity-service/Dockerfile
+    image: identity-service:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    environment:
+      <<: [ *common-env, *mail-env ]
+      SERVER_PORT: 8082
+      IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/medic
+      IDENTITY_DB_USERNAME: medic_identity
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}
+      UPLOAD_BASE_DIR: /app/uploads
+    ports:
+      - "${IDENTITY_PORT:-8082}:8082"
+    volumes:
+      - avatar_uploads:/app/uploads
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8082/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: audit-service/Dockerfile
+    image: audit-service:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      SERVER_PORT: 8085
+      AUDIT_DB_URL: jdbc:postgresql://postgres:5432/medic
+      AUDIT_DB_USERNAME: medic_audit
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}
+    ports:
+      - "${AUDIT_PORT:-8085}:8085"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8085/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    image: gateway-service:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      booking-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      GATEWAY_PORT: 8080
+      BOOKING_URL: http://booking-service:8081
+      NOTIFICATION_URL: http://notification-service:8084
+      AUDIT_URL: http://audit-service:8085
+      IDENTITY_URL: http://identity-service:8082
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174}
+      GATEWAY_READ_TIMEOUT: ${GATEWAY_READ_TIMEOUT:-1h}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  avatar_uploads:
