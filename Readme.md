@@ -17,7 +17,7 @@ while doctors can manage their schedules, availability rules, and appointment hi
   eligible patient receives a 15-minute offer that reserves the slot until accepted, declined, or expired.
 - **Real-Time & Email Notifications:** Server-Sent Events (SSE) push notifications for appointment updates, with
   matching styled email notifications dispatched after the business transaction commits.
-- **Security & Reliability:** Global exception handling, API rate limiting using Redis, and comprehensive audit logging.
+- **Security & Reliability:** Global exception handling, gateway Redis rate limiting, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
 ## Demo Credentials
@@ -38,7 +38,8 @@ accounts.
 
 - **Java 17**
 - **Spring Boot 4.1.1**
-- **Spring Web MVC** for REST APIs
+- **Spring Cloud Gateway Server WebMVC 5.0.4** as the public edge (`gateway-service`)
+- **Spring Web MVC** for REST APIs (`booking-service`, `identity-service`, `notification-service`, `audit-service`)
 - **Spring Security** for authentication and role-based authorization
 - **JJWT** for JWT creation and validation
 - **Spring Data JPA** for persistence
@@ -50,7 +51,7 @@ accounts.
 - **Spring Mail** for email delivery
 - **Thymeleaf** for styled HTML email templates
 - **Spring Data Redis** for Redis integration
-- **Bucket4j** with Redis support for rate limiting
+- **Bucket4j** with Redis support for gateway rate limiting
 - **Spring AOP** for cross-cutting concerns such as audit logging
 - **Spring Boot Actuator** for health/monitoring endpoints
 - **Springdoc OpenAPI / Swagger UI** for API documentation
@@ -60,20 +61,22 @@ accounts.
 - **Java `ThreadPoolExecutor`** for bounded post-commit email dispatch
 - **JUnit** and **Spring Boot Test** for testing
 - **H2** for business-logic tests and **Testcontainers** for PostgreSQL integration tests
-- **Spring Boot DevTools** for local development
 - **Maven** for dependency management and builds
 
 ## Architecture
 
-The application follows a clean-layered architecture:
+The repository is a Maven multi-module microservices layout:
 
-- **Controllers:** Handle incoming HTTP requests and define API endpoints.
-- **Services:** Contain the core business logic (e.g., availability calculation, booking validation).
-- **Repositories:** Manage data persistence using Spring Data JPA.
-- **Database:** PostgreSQL for persistent data storage.
+| Module                                                              | Port | Responsibility                                                    |
+|---------------------------------------------------------------------|------|-------------------------------------------------------------------|
+| `gateway-service`                                                   | 8080 | Public entry: routing, CORS, Redis rate limiting, correlation IDs |
+| `booking-service`                                                   | 8081 | Availability, appointments, waitlist, schedule cache              |
+| `identity-service`                                                  | 8082 | Auth, users, profiles, specializations, doctor directory          |
+| `notification-service`                                              | 8084 | In-app notifications, SSE, email                                  |
+| `audit-service`                                                     | 8085 | Append-only audit log                                             |
+| `medic-common` / `medic-security` / `medic-messaging` / `medic-web` | —    | Shared contracts and infra libraries                              |
 
-Additional architectural components include distinct layers for DTOs, MapStruct Mappers, Security Configurations, Global
-Exception Handling, and custom Annotations (e.g., for Audit Logging).
+Public clients keep using `http://localhost:8080`.
 
 ## Booking Engine Design
 
@@ -144,7 +147,8 @@ running.
 ## Testing
 
 H2 tests cover business workflows; PostgreSQL/Testcontainers tests cover constraints and concurrency (Docker required).
-Run the suite with `./mvnw test`; see the [Concurrency Guide](docs/CONCURRENCY.md) for details.
+The gateway has route, CORS, proxy, and rate-limit rule tests. Run the suite with `./mvnw test`; see the
+[Concurrency Guide](docs/CONCURRENCY.md) for details.
 
 ## Installation
 
@@ -162,34 +166,29 @@ Follow these steps to run the application locally:
     - Create a PostgreSQL database named `medic`.
 
 3. **Environment Variables:**
-   Create a `.env` file in the root directory based on `.env.example`:
-   ```properties
-   SPRING_PROFILE=dev
-   JWT_SECRET=your_super_secret_key_needs_to_be_long_enough
-   JWT_EXPIRATION=86400000
-   DB_URL=jdbc:postgresql://localhost:5432/medic
-   DB_USERNAME=postgres
-   DB_PASSWORD=your_password
-   MAIL_USERNAME=your_email@gmail.com
-   MAIL_PASSWORD=your_app_password
-   APP_BASE_URL=http://localhost:8080
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-    ```
+   Copy the example and fill in the secrets. `.env` is git-ignored.
+   ```bash
+   cp .env.example .env
+   ```
 
 4. **Start the Application:**
-   Run the application using Maven:
+   Prefer Compose for the full stack, or run services individually:
    ```bash
-   ./mvnw spring-boot:run
+   docker compose up --build
+
+   # Or locally (examples):
+   ./mvnw -pl identity-service spring-boot:run
+   ./mvnw -pl booking-service spring-boot:run
+   ./mvnw -pl gateway-service spring-boot:run
    ```
 
 5. **Seed the Database:**
-   The application will automatically initialize the database structure and seed roles and specializations from
-   `src/main/resources/data.sql`.
+   Identity Flyway/seed initializes roles and specializations. Booking Flyway owns the `booking` schema.
 
 6. **Access the Application:**
-    - API Base URL: `http://localhost:8080`
-    - Swagger UI: `http://localhost:8080/swagger-ui.html`
+    - API Base URL: `http://localhost:8080` (gateway)
+    - Booking via gateway: `http://localhost:8080/api/booking/...`
+    - Identity via gateway: `http://localhost:8080/api/identity/...`
 
 ## Major Challenges
 
