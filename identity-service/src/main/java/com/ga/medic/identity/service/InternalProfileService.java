@@ -20,6 +20,7 @@ public class InternalProfileService {
 
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorProfileRepository doctorProfileRepository;
+    private final FileStorageService fileStorageService;
 
     /**
      * Returns the patient fields booking stores on an appointment or waitlist row.
@@ -52,7 +53,7 @@ public class InternalProfileService {
         return new InternalPatientProfileResponse(
                 profile.getId(),
                 user.getFullName(),
-                user.getImageUrl(),
+                fileStorageService.publicImageUrl(user.getImageUrl()),
                 profile.getAddress(),
                 profile.getCity(),
                 profile.getCountry(),
@@ -100,7 +101,7 @@ public class InternalProfileService {
         return new InternalDoctorProfileResponse(
                 profile.getId(),
                 user.getFullName(),
-                user.getImageUrl(),
+                fileStorageService.publicImageUrl(user.getImageUrl()),
                 profile.getQualification(),
                 specialization == null ? null : specialization.getId(),
                 specialization == null ? null : specialization.getName(),
