@@ -10,7 +10,7 @@ pipeline {
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         EB_APP   = 'medic'
-        EB_ENV   = 'medic-env'
+        EB_ENV   = 'medic-env-1'
         SERVICES = 'gateway-service identity-service booking-service notification-service audit-service'
     }
 
@@ -75,17 +75,20 @@ pipeline {
                         ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
                         REGISTRY=$ACCOUNT.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
                         BUCKET=elasticbeanstalk-$AWS_DEFAULT_REGION-$ACCOUNT
-                        rm -rf bundle medic-*.zip && mkdir bundle
-                        sed -e "s#__REGISTRY__#$REGISTRY#g" -e "s#__TAG__#$IMAGE_TAG#g" \
-                            deploy/docker-compose.prod.yml > bundle/docker-compose.yml
-                        cp -r docker/postgres bundle/postgres-init
-                        cp -r docker/kafka bundle/kafka
+                        rm -rf bundle medic-*.zip && mkdir -p bundle/docker/kafka
+                        cp deploy/docker-compose.prod.yml bundle/docker-compose.yml
+                        sed -i 's#../docker/kafka/create-topics.sh#./docker/kafka/create-topics.sh#' bundle/docker-compose.yml
+                        cp docker/kafka/create-topics.sh bundle/docker/kafka/create-topics.sh
                         (cd bundle && zip -qr ../medic-$IMAGE_TAG.zip .)
                         aws s3 cp medic-$IMAGE_TAG.zip s3://$BUCKET/medic/medic-$IMAGE_TAG.zip
                         aws elasticbeanstalk create-application-version --application-name $EB_APP \
                             --version-label $IMAGE_TAG-$BUILD_NUMBER \
                             --source-bundle S3Bucket=$BUCKET,S3Key=medic/medic-$IMAGE_TAG.zip
-                        aws elasticbeanstalk update-environment --environment-name $EB_ENV --version-label $IMAGE_TAG-$BUILD_NUMBER
+                        aws elasticbeanstalk update-environment --environment-name $EB_ENV \
+                            --version-label $IMAGE_TAG-$BUILD_NUMBER \
+                            --option-settings \
+                              Namespace=aws:elasticbeanstalk:application:environment,OptionName=IMAGE_REGISTRY,Value=$REGISTRY \
+                              Namespace=aws:elasticbeanstalk:application:environment,OptionName=IMAGE_TAG,Value=$IMAGE_TAG
                         DONE=no
                         for i in $(seq 1 80); do
                           OUT=$(aws elasticbeanstalk describe-environments --environment-names $EB_ENV \
