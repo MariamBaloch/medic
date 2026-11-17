@@ -13,8 +13,8 @@ import com.ga.medic.booking.model.AvailabilityRule;
 import com.ga.medic.booking.repository.AppointmentRepository;
 import com.ga.medic.booking.repository.AppointmentWaitlistEntryRepository;
 import com.ga.medic.booking.repository.AvailabilityRuleRepository;
-import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.booking.support.IdentityTestData;
+import com.ga.medic.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:appointment_waitlist;DB_CLOSE_DELAY=-1")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:appointment_business_rules;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS booking")
 @ActiveProfiles("test")
 class AppointmentWaitlistH2Test {
 
@@ -69,6 +69,19 @@ class AppointmentWaitlistH2Test {
     private InternalIdentityClient internalIdentityClient;
 
     private TestData testData;
+
+    private static long patientUserId(long patientId) {
+        return 1000L + patientId;
+    }
+
+    private static String patientName(long patientId) {
+        return switch ((int) patientId) {
+            case 101 -> "First Waiter";
+            case 102 -> "Second Waiter";
+            case 103 -> "Occupant Patient";
+            default -> "Patient " + patientId;
+        };
+    }
 
     @BeforeEach
     void setUp() {
@@ -171,19 +184,6 @@ class AppointmentWaitlistH2Test {
         when(authenticatedUser.requirePatientId()).thenReturn(patientId);
         when(authenticatedUser.getPatientId()).thenReturn(patientId);
         when(authenticatedUser.getName()).thenReturn(name);
-    }
-
-    private static long patientUserId(long patientId) {
-        return 1000L + patientId;
-    }
-
-    private static String patientName(long patientId) {
-        return switch ((int) patientId) {
-            case 101 -> "First Waiter";
-            case 102 -> "Second Waiter";
-            case 103 -> "Occupant Patient";
-            default -> "Patient " + patientId;
-        };
     }
 
     private record TestData(

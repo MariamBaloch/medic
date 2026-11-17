@@ -10,8 +10,8 @@ import com.ga.medic.booking.model.AvailabilityRule;
 import com.ga.medic.booking.repository.AppointmentRepository;
 import com.ga.medic.booking.repository.AvailabilityExceptionRepository;
 import com.ga.medic.booking.repository.AvailabilityRuleRepository;
-import com.ga.medic.security.AuthenticatedUser;
 import com.ga.medic.booking.support.IdentityTestData;
+import com.ga.medic.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:appointment_business_rules;DB_CLOSE_DELAY=-1")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:appointment_business_rules;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS booking")
 @ActiveProfiles("test")
 class AppointmentRescheduleH2Test {
 
