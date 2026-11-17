@@ -1,0 +1,214 @@
+name: medic
+
+x-app: &app
+  restart: unless-stopped
+  env_file: .env
+  mem_limit: 512m
+
+x-jvm: &jvm
+  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+  SPRING_PROFILES_ACTIVE: prod
+
+x-secrets: &secrets
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
+
+x-mail: &mail
+  MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+
+services:
+  gateway-service:
+    <<: *app
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/medic/gateway-service:${IMAGE_TAG:?IMAGE_TAG is required}
+    ports:
+      - "80:8080"
+    depends_on:
+      booking-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *jvm
+      SERVER_FORWARD_HEADERS_STRATEGY: none
+      GATEWAY_PORT: "8080"
+      BOOKING_URL: http://booking-service:8081
+      NOTIFICATION_URL: http://notification-service:8084
+      AUDIT_URL: http://audit-service:8085
+      IDENTITY_URL: http://identity-service:8082
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      GATEWAY_READ_TIMEOUT: ${GATEWAY_READ_TIMEOUT:-1h}
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  identity-service:
+    <<: *app
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/medic/identity-service:${IMAGE_TAG:?IMAGE_TAG is required}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [ *jvm, *secrets, *mail ]
+      SERVER_PORT: "8082"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+      IDENTITY_DB_URL: ${IDENTITY_DB_URL:?IDENTITY_DB_URL is required}
+      IDENTITY_DB_USERNAME: ${IDENTITY_DB_USERNAME:?IDENTITY_DB_USERNAME is required}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}
+      UPLOAD_BASE_DIR: /app/uploads
+    volumes:
+      - avatar_uploads:/app/uploads
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8082/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  booking-service:
+    <<: *app
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/medic/booking-service:${IMAGE_TAG:?IMAGE_TAG is required}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [ *jvm, *secrets ]
+      SERVER_PORT: "8081"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      IDENTITY_URL: http://identity-service:8082
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+      PUBLIC_BASE_PATH: /api/booking
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Bahrain}
+      BOOKING_DB_URL: ${BOOKING_DB_URL:?BOOKING_DB_URL is required}
+      BOOKING_DB_USERNAME: ${BOOKING_DB_USERNAME:?BOOKING_DB_USERNAME is required}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?BOOKING_DB_PASSWORD is required}
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+      APP_OUTBOX_PUBLISHER_ENABLED: "true"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  notification-service:
+    <<: *app
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/medic/notification-service:${IMAGE_TAG:?IMAGE_TAG is required}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [ *jvm, *secrets, *mail ]
+      SERVER_PORT: "8084"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NOTIFICATION_DB_URL: ${NOTIFICATION_DB_URL:?NOTIFICATION_DB_URL is required}
+      NOTIFICATION_DB_USERNAME: ${NOTIFICATION_DB_USERNAME:?NOTIFICATION_DB_USERNAME is required}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8084/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  audit-service:
+    <<: *app
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/medic/audit-service:${IMAGE_TAG:?IMAGE_TAG is required}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [ *jvm, *secrets ]
+      SERVER_PORT: "8085"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUDIT_DB_URL: ${AUDIT_DB_URL:?AUDIT_DB_URL is required}
+      AUDIT_DB_USERNAME: ${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8085/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    mem_limit: 192m
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.1
+    hostname: kafka
+    restart: unless-stopped
+    mem_limit: 768m
+    environment:
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  kafka-init:
+    image: apache/kafka:3.8.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ../docker/kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: [ "/bin/sh", "/create-topics.sh" ]
+    restart: "no"
+
+volumes:
+  avatar_uploads:
