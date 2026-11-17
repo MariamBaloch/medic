@@ -2,6 +2,7 @@ package com.ga.medic.audit.controller;
 
 import com.ga.medic.audit.dto.AuditLogResponse;
 import com.ga.medic.audit.service.AuditLogService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,8 @@ public class AuditLogController {
     private final AuditLogService auditLogService;
 
     @GetMapping
+    @Operation(summary = "List audit logs",
+            description = "Returns every recorded business audit log, newest first. Admin role required.")
     public ResponseEntity<List<AuditLogResponse>> getAllLogs() {
         return ResponseEntity.ok(auditLogService.getAllLogs());
     }

@@ -5,6 +5,10 @@ import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
 import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
 import com.ga.medic.identity.service.InternalProfileService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,27 +19,41 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal")
 @RequiredArgsConstructor
+@Tag(name = "Internal profiles", description = "Service-to-service profile reads. Requires the X-Internal-Key header.")
+@SecurityRequirement(name = "internalApiKey")
 public class InternalProfileController {
 
     private final InternalProfileService internalProfileService;
 
     @GetMapping("/patients/{id}")
-    public ResponseEntity<InternalPatientSnapshotResponse> getPatient(@PathVariable Long id) {
+    @Operation(summary = "Get a patient snapshot",
+            description = "Returns the patient fields stored on a booking or waitlist row: id, user id, name, and email.")
+    public ResponseEntity<InternalPatientSnapshotResponse> getPatient(
+            @Parameter(description = "Patient profile id") @PathVariable Long id) {
         return ResponseEntity.ok(internalProfileService.getPatientSnapshot(id));
     }
 
     @GetMapping("/patients/{id}/profile")
-    public ResponseEntity<InternalPatientProfileResponse> getPatientProfile(@PathVariable Long id) {
+    @Operation(summary = "Get a live patient profile",
+            description = "Returns the current patient profile, including details that are not copied onto a booking.")
+    public ResponseEntity<InternalPatientProfileResponse> getPatientProfile(
+            @Parameter(description = "Patient profile id") @PathVariable Long id) {
         return ResponseEntity.ok(internalProfileService.getPatientProfile(id));
     }
 
     @GetMapping("/doctors/{id}")
-    public ResponseEntity<InternalDoctorSnapshotResponse> getDoctor(@PathVariable Long id) {
+    @Operation(summary = "Get a doctor snapshot",
+            description = "Returns the doctor fields stored on a booking or waitlist row, including specialization name and consultation fee.")
+    public ResponseEntity<InternalDoctorSnapshotResponse> getDoctor(
+            @Parameter(description = "Doctor profile id") @PathVariable Long id) {
         return ResponseEntity.ok(internalProfileService.getDoctorSnapshot(id));
     }
 
     @GetMapping("/doctors/{id}/profile")
-    public ResponseEntity<InternalDoctorProfileResponse> getDoctorProfile(@PathVariable Long id) {
+    @Operation(summary = "Get a live doctor profile",
+            description = "Returns the current doctor profile, including photo, qualification, and biography.")
+    public ResponseEntity<InternalDoctorProfileResponse> getDoctorProfile(
+            @Parameter(description = "Doctor profile id") @PathVariable Long id) {
         return ResponseEntity.ok(internalProfileService.getDoctorProfile(id));
     }
 }
