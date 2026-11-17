@@ -42,21 +42,30 @@ public class NotificationController {
     }
 
     @GetMapping("/unread-count")
+    @Operation(summary = "Count unread notifications",
+            description = "Returns how many notifications for the authenticated user have not been read.")
     public ResponseEntity<UnreadNotificationCountResponse> getUnreadCount() {
         return ResponseEntity.ok(notificationService.getUnreadCount(authenticatedUser.getUserId()));
     }
 
     @PatchMapping("/read-all")
+    @Operation(summary = "Mark all notifications read",
+            description = "Marks every unread notification for the authenticated user as read and returns how many were updated.")
     public ResponseEntity<MarkAllNotificationsReadResponse> markAllAsRead() {
         return ResponseEntity.ok(notificationService.markAllAsRead(authenticatedUser.getUserId()));
     }
 
     @PatchMapping("/{notificationId}/read")
-    public ResponseEntity<NotificationResponse> markAsRead(@PathVariable Long notificationId) {
+    @Operation(summary = "Mark one notification read",
+            description = "Marks a single notification owned by the authenticated user as read.")
+    public ResponseEntity<NotificationResponse> markAsRead(
+            @Parameter(description = "Notification id") @PathVariable Long notificationId) {
         return ResponseEntity.ok(notificationService.markAsRead(authenticatedUser.getUserId(), notificationId));
     }
 
     @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Subscribe to notification events",
+            description = "Opens a server-sent event stream of new notifications for the authenticated user. The response is text/event-stream.")
     public SseEmitter subscribe() {
         return notificationService.subscribe(authenticatedUser.getUserId());
     }
