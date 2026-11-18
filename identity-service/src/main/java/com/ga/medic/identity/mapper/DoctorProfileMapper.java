@@ -12,6 +12,7 @@ import org.mapstruct.MappingTarget;
 public interface DoctorProfileMapper {
 
     @Mapping(target = "doctorProfileId", source = "id")
+    @Mapping(target = "isVerified", source = "isVerified")
     @Mapping(target = "specialization", source = "specialization")
     @Mapping(target = "audit.createdAt", source = "createdAt")
     @Mapping(target = "audit.updatedAt", source = "updatedAt")

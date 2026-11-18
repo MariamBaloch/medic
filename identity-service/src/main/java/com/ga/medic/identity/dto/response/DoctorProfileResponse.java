@@ -29,6 +29,9 @@ public record DoctorProfileResponse(
         @Schema(description = "Professional biography")
         String bio,
 
+        @Schema(description = "Whether an admin has verified this doctor", example = "false")
+        Boolean isVerified,
+
         AuditResponse audit
 ) {
 }
