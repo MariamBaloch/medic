@@ -20,10 +20,24 @@ while doctors can manage their schedules, availability rules, and appointment hi
 - **Security & Reliability:** Global exception handling, gateway Redis rate limiting, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
+## Live Deployment
+
+Medic runs on AWS: the frontend on S3 and CloudFront, the backend on Elastic Beanstalk with an RDS database, and images
+stored in ECR. Jenkins builds, tests and deploys every push to `main`.
+
+| Surface         | URL                                                                           |
+|-----------------|-------------------------------------------------------------------------------|
+| Frontend        | https://d4405qjwlfxlp.cloudfront.net/                                         |
+| Backend API     | https://d27j77oo959eqd.cloudfront.net/                                        |
+| Frontend source | [MariamBaloch/medic_frontend](https://github.com/MariamBaloch/medic_frontend) |
+
+These AWS addresses may be taken offline after the course ends. To run the project yourself, follow
+[Run locally](#run-locally). Full deployment details are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Demo Credentials
 
-The application is pre-seeded with sample data to allow you to easily test the endpoints without needing to register new
-accounts.
+For local runs, the application is pre-seeded with sample data so you can test the endpoints without registering new
+accounts. These accounts are created by the seed data and are for local use only.
 
 | Role    | Email                | Password  |
 |---------|----------------------|-----------|
@@ -35,6 +49,8 @@ accounts.
 | Patient | `patient3@medic.com` | `Potato!` |
 
 ## Technologies
+
+**Application**
 
 - **Java 17**
 - **Spring Boot 4.1.1**
@@ -61,15 +77,38 @@ accounts.
 - **MapStruct** for DTO/entity mapping
 - **Lombok** for reducing boilerplate
 - **Server-Sent Events (SSE)** for real-time notifications
-- **Java `ThreadPoolExecutor`** for bounded post-commit email dispatch
+- **Java `ThreadPoolExecutor`** for bounded post-commit email dispatch **Testing**
+
 - **JUnit**, **Spring Boot Test**, and **Cucumber** for testing
-- **H2** for business-logic and booking Cucumber tests, and **Testcontainers** for PostgreSQL concurrency tests
+- **H2** for business-logic and booking Cucumber tests, and **Testcontainers** for PostgreSQL concurrency tests **Build,
+  delivery and infrastructure**
+
 - **Maven** for dependency management and builds
+- **Docker** and **Docker Compose** for containers and local and production stacks
+- **Jenkins** for the CI/CD pipeline
+- **AWS:** Elastic Beanstalk (backend), RDS PostgreSQL (database), ECR (container images), S3 and CloudFront (frontend,
+  and the HTTPS address in front of the backend)
 
 ## Architecture
 
 The repository is a Maven multi-module layout. Services are the running applications. Libraries are shared code with no
 port.
+
+```text
+Browser
+   |
+   v
+gateway-service (8080)  -- routing, CORS, rate limiting, correlation IDs
+   |
+   +--> identity-service (8082)       accounts, profiles, JWT issuing
+   +--> booking-service (8081)        availability, appointments, waitlist
+   +--> notification-service (8084)   in-app notifications, SSE, email
+   +--> audit-service (8085)          append-only audit log
+ 
+Redis  : token blacklist and versions, schedule-cache version, rate limiting
+Kafka  : events between services (transactional outbox, dead-letter topics)
+Postgres: one database "medic", one schema and one database user per service
+```
 
 ### Services
 
@@ -90,17 +129,11 @@ port.
 | `medic-messaging` | Transactional outbox, processed events, dead-letter handling | [README](medic-messaging/README.md) |
 | `medic-web`       | Shared error body, page shape, correlation id                | [README](medic-web/README.md)       |
 
-Public clients keep using `http://localhost:8080`. One Postgres database, `medic`, is shared. Isolation is a role and a
-schema per service, not a database per service. How availability is calculated, how a slot is locked, and how a booking
-becomes a notification are in the [booking](booking-service/README.md)
-and [notification](notification-service/README.md) READMEs. Production Compose is [
-`deploy/docker-compose.prod.yml`](deploy/docker-compose.prod.yml).
-
-## Project Planning and User Stories
-
-Project 3 is in [`docs/Project_3_Planning.md`](docs/Project_3_Planning.md). The two-week service split is in
-[`docs/Project_4_Planning.md`](docs/Project_4_Planning.md). User stories and project tracking are maintained on the
-[Medic Trello board](https://trello.com/b/9VwIYDT1/medic).
+Public clients keep using `http://localhost:8080` locally. One Postgres database, `medic`, is shared. Isolation is a
+role and a schema per service, not a database per service. How availability is calculated, how a slot is locked, and
+how a booking becomes a notification are in the [booking](booking-service/README.md)
+and [notification](notification-service/README.md) READMEs. Production Compose is
+[`deploy/docker-compose.prod.yml`](deploy/docker-compose.prod.yml).
 
 ## Database schemas
 
@@ -131,74 +164,107 @@ Interactive Swagger documentation is served by each API service, through the gat
 - Booking: `http://localhost:8080/api/booking/swagger-ui.html`
 - Notification: `http://localhost:8080/api/notification/swagger-ui.html`
 - Audit: `http://localhost:8080/api/audit/swagger-ui.html`
+  The `prod` profile disables these pages, so they are not available on the deployed backend. The gateway has no Swagger
+  UI.
 
-The `prod` profile disables these pages. The gateway has no Swagger UI.
+## Run locally
+
+Requirements: Docker with Docker Compose. Java 17 is only needed to run the tests or to run a service outside Docker.
+
+1. **Clone the repository:**
+
+```bash
+git clone <repository-url>
+cd medic
+```
+
+2. **Configure the environment:**
+   Copy the example and fill in the secrets. `.env` is git-ignored, so your secrets are never committed.
+
+```bash
+cp .env.example .env
+```
+
+Generate a strong secret with `openssl rand -base64 32`. Compose refuses to start if a required secret is empty.
+
+3. **Start the full stack:**
+
+```bash
+docker compose up --build
+```
+
+This starts Postgres, Redis, Kafka, Mailpit, the four services and the gateway. The first start also creates the
+`medic` database, the service roles and the four schemas. Each service's Flyway then creates its own tables, and the
+identity seed loads the demo users and specializations.
+
+4. **Use the application:**
+    - API base URL: `http://localhost:8080` (gateway)
+    - Booking via gateway: `http://localhost:8080/api/booking/...`
+    - Identity via gateway: `http://localhost:8080/api/identity/...`
+    - Emails sent by the application appear in Mailpit: `http://localhost:8025`
+      Optional: add `--profile ui` to also start Kafka UI.
+
+**Running a service outside Docker (for development).** Start the dependencies with Compose
+(`docker compose up postgres redis kafka kafka-init mailpit`), then run the service you are working on:
+
+```bash
+./mvnw -pl identity-service spring-boot:run
+./mvnw -pl booking-service spring-boot:run
+./mvnw -pl gateway-service spring-boot:run
+```
+
+The service needs the same environment variables as in `.env.example`.
 
 ## Testing
 
 H2 tests cover business workflows. PostgreSQL/Testcontainers tests cover constraints and concurrency (Docker required).
 Booking Cucumber covers booking, cancellation, anonymous access, health, and a ten-patient race for one slot. The
-gateway has route, CORS, proxy, and rate-limit rule tests. Run the suite with `./mvnw test`; see the
-[Concurrency Guide](docs/CONCURRENCY.md) for details.
+gateway has route, CORS, proxy, and rate-limit rule tests. Run the suite with `./mvnw test` (or `./mvnw verify`, as the
+pipeline does); see the [Concurrency Guide](docs/CONCURRENCY.md) for details.
 
-## Installation
+## CI/CD
 
-Follow these steps to run the application locally:
+The `Jenkinsfile` defines the pipeline. A push to `main` runs these stages in order, and a failure stops the later ones:
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd medic
-   ```
+1. **Build and test** with `./mvnw verify`.
+2. **Build images** for the five services with Docker Compose, tagged with the short Git commit hash.
+3. **Push to ECR** under `medic/<service>:<commit>`.
+4. **Deploy to Beanstalk** with the production Compose file.
+5. **Verify** that `/actuator/health` answers on the deployed backend.
+   No secrets are stored in the repository. Runtime secrets are Elastic Beanstalk environment properties, and the AWS
+   keys
+   used by the pipeline are Jenkins credentials. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the AWS setup.
 
-2. **Configure Services:**
-    - Ensure **PostgreSQL** is running on your system (default port 5432).
-    - Ensure **Redis** is running on your system (default port 6379).
-    - Create a PostgreSQL database named `medic`.
+## Project Planning and User Stories
 
-3. **Environment Variables:**
-   Copy the example and fill in the secrets. `.env` is git-ignored.
-   ```bash
-   cp .env.example .env
-   ```
-
-4. **Start the Application:**
-   Prefer Compose for the full stack, or run services individually:
-   ```bash
-   docker compose up --build
-
-   # Or locally (examples):
-   ./mvnw -pl identity-service spring-boot:run
-   ./mvnw -pl booking-service spring-boot:run
-   ./mvnw -pl gateway-service spring-boot:run
-   ```
-
-5. **Database layout:**
-   Compose init creates the `medic` database, the service roles, and the four schemas. Each service's Flyway then
-   creates its own tables. Identity seed loads the demo users and specializations.
-
-6. **Access the Application:**
-    - API Base URL: `http://localhost:8080` (gateway)
-    - Booking via gateway: `http://localhost:8080/api/booking/...`
-    - Identity via gateway: `http://localhost:8080/api/identity/...`
+Project 3 is in [`docs/Project_3_Planning.md`](docs/Project_3_Planning.md). The two-week service split is in
+[`docs/Project_4_Planning.md`](docs/Project_4_Planning.md). User stories and project tracking are maintained on the
+[Medic Trello board](https://trello.com/b/9VwIYDT1/medic).
 
 ## Major Challenges
 
 - **Availability Engine:** Calculating precise 15-minute appointment slots based on dynamic weekly schedules while
   excluding specific date/time exceptions and already booked appointments proved mathematically and logically
   challenging.
-- **Concurrency Control:** Preventing duplicate bookings and patient overlaps required coordinating patient-row locks,
+- **Concurrency Control:** Preventing duplicate bookings and patient overlaps required coordinating patient and
   exact-slot advisory locks, optimistic versions, and PostgreSQL constraints.
 - **Waitlist Priority:** Releasing a slot and offering it to the next eligible patient had to remain atomic with booking
   operations so an ordinary request could not take a slot during an active offer.
 - **Service split:** Booking could no longer read identity tables. Snapshots, a claims JWT, and a keyed internal API
   replaced the old in-process calls.
+- **Reliable messaging:** Events must not be lost or applied twice. A transactional outbox, idempotent consumers and
+  dead-letter topics cover this.
+- **Deployment on a small budget:** The whole system runs on one Elastic Beanstalk instance with Redis and Kafka as
+  containers, and a private RDS database. Memory limits and a separate HTTPS address for the backend were needed to
+  make that work.
 
 ## Future Improvements
 
 - **Broader API Testing:** Extend Cucumber and the PostgreSQL suites to more waitlist and notification cases.
 - **More than one booking instance:** Run two booking replicas against one database and show ShedLock and the slot lock
   under parallel requests.
+- **Managed messaging and encryption in transit:** Replace the single Kafka container with a managed service, and
+  encrypt the last hop between CloudFront and the backend with a load balancer and certificate.
 
 ## Credits & Resources
 
@@ -218,5 +284,6 @@ Follow these steps to run the application locally:
 - Server-Sent Events
   (SSE): [Medium](https://medium.com/@vishalpriyadarshi/real-time-event-streaming-in-spring-boot-using-server-sent-events-sse-a-guide-for-modern-f1048d3f5796)
 - Spring Data JPA Specification: [Dev.to](https://dev.to/saladlam/spring-data-jpa-about-specification-interface-56ed)
-- AI assistance: [OpenAI ChatGPT](https://chatgpt.com/) was used for learning and code enhancement; suggestions were
-  reviewed against the application.
+- AI assistance: [OpenAI ChatGPT](https://chatgpt.com/) and [Anthropic Claude](https://claude.ai/) were used for
+  learning, planning, review and code enhancement; suggestions were reviewed against the application.
+ 
