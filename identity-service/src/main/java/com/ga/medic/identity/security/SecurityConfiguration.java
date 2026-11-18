@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -31,6 +32,14 @@ public class SecurityConfiguration {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Specialization lookup is used on the public registration page, so it never enters the JWT filter.
+     */
+    @Bean
+    public WebSecurityCustomizer publicSpecializations() {
+        return web -> web.ignoring().requestMatchers("/specializations", "/specializations/**");
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
@@ -46,6 +55,8 @@ public class SecurityConfiguration {
                                 "/swagger-ui.html",
                                 "/actuator/**",
                                 "/uploads/**",
+                                "/specializations",
+                                "/specializations/**",
                                 "/internal/**"
                         ).permitAll()
                         .anyRequest().authenticated()

@@ -3,6 +3,7 @@ package com.ga.medic.identity.controller;
 import com.ga.medic.identity.dto.response.SpecializationResponse;
 import com.ga.medic.identity.service.SpecializationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +17,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/specializations")
 @Tag(name = "Specializations", description = "Specialization lookup")
+@SecurityRequirements
 @RequiredArgsConstructor
 public class SpecializationController {
 
     private final SpecializationService specializationService;
 
-    @Operation(summary = "Retrieve specializations", description = "Returns all specializations, optionally filtered by name or description")
+    @Operation(summary = "Retrieve specializations",
+            description = "Returns all specializations, optionally filtered by name or description. No authentication required.")
     @GetMapping
     public ResponseEntity<List<SpecializationResponse>> getSpecializations(@RequestParam(required = false) String search) {
         return ResponseEntity.ok(specializationService.getSpecializations(search));

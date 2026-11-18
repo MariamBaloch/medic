@@ -191,6 +191,7 @@ services:
     environment:
       <<: [ *common-env, *mail-env ]
       SERVER_PORT: 8082
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/medic
       IDENTITY_DB_USERNAME: medic_identity
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?IDENTITY_DB_PASSWORD is required}

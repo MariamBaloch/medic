@@ -62,6 +62,12 @@ public class AuthService {
     @Value("${app.base-url:http://localhost:8080}")
     private String appBaseUrl;
 
+    @Value("${app.public-base-path:/api/identity}")
+    private String publicBasePath;
+
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
+
     /**
      * Registers a patient account and creates its patient profile.
      *
@@ -193,7 +199,11 @@ public class AuthService {
                 "email/email-verification",
                 Map.of(
                         "fullName", user.getFullName(),
-                        "verificationLink", appBaseUrl + "/api/identity/auth/users/verify?token=" + user.getVerificationToken(),
+                        "verificationLink", joinUrl(
+                                appBaseUrl,
+                                publicBasePath,
+                                "auth/users/verify?token=" + user.getVerificationToken()
+                        ),
                         "expiryMinutes", EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES
                 )
         );
@@ -333,9 +343,42 @@ public class AuthService {
                 Map.of(
                         "fullName", user.getFullName(),
                         "resetToken", token,
+                        "resetLink", joinUrl(frontendUrl, "reset-password?token=" + token),
                         "expiryMinutes", PASSWORD_RESET_TOKEN_EXPIRY_MINUTES
                 )
         );
+    }
+
+    /**
+     * Joins URL pieces with exactly one slash between them.
+     * A base that already ends with {@code /} does not produce {@code //}.
+     */
+    private static String joinUrl(String... parts) {
+        StringBuilder url = new StringBuilder();
+        for (String part : parts) {
+            if (part == null || part.isBlank()) {
+                continue;
+            }
+            String piece = part.trim();
+            int queryAt = piece.indexOf('?');
+            String path = queryAt >= 0 ? piece.substring(0, queryAt) : piece;
+            String query = queryAt >= 0 ? piece.substring(queryAt) : "";
+            while (path.endsWith("/")) {
+                path = path.substring(0, path.length() - 1);
+            }
+            if (url.isEmpty()) {
+                url.append(path).append(query);
+                continue;
+            }
+            while (path.startsWith("/")) {
+                path = path.substring(1);
+            }
+            if (!path.isEmpty()) {
+                url.append('/').append(path);
+            }
+            url.append(query);
+        }
+        return url.toString();
     }
 
     /**
