@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface PatientProfileRepository extends JpaRepository<PatientProfile, Long> {
@@ -14,4 +16,11 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
             select p from PatientProfile p join fetch p.user where p.id = :id
             """)
     Optional<PatientProfile> findByIdWithUser(@Param("id") Long id);
+
+    @Query("""
+            select patientProfile from PatientProfile patientProfile
+            join fetch patientProfile.user
+            where patientProfile.id in :ids
+            """)
+    List<PatientProfile> findAllByIdInWithUser(@Param("ids") Collection<Long> ids);
 }

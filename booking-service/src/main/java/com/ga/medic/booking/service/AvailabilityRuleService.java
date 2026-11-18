@@ -41,6 +41,7 @@ public class AvailabilityRuleService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentWaitlistEntryRepository waitlistEntryRepository;
     private final AppointmentMapper appointmentMapper;
+    private final AppointmentProfileImageService appointmentProfileImages;
     private final InternalIdentityClient internalIdentityClient;
     private final DoctorWeeklyScheduleCacheService weeklyScheduleCacheService;
     private final ApplicationEventPublisher eventPublisher;
@@ -185,7 +186,10 @@ public class AvailabilityRuleService {
 
         List<Appointment> appointments = appointmentRepository.findActiveByDoctorAndDateRange(doctorId, from, to);
 
-        return new DoctorCalendarResponse(slots, appointmentMapper.toResponseList(appointments));
+        return new DoctorCalendarResponse(
+                slots,
+                appointmentProfileImages.apply(appointmentMapper.toResponseList(appointments))
+        );
     }
 
     /**

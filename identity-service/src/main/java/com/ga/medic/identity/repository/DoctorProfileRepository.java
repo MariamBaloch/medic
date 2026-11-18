@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,13 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Lo
             where d.id = :id
             """)
     Optional<DoctorProfile> findByIdWithUserAndSpecialization(@Param("id") Long id);
+
+    @Query("""
+            select doctorProfile from DoctorProfile doctorProfile
+            join fetch doctorProfile.user
+            where doctorProfile.id in :ids
+            """)
+    List<DoctorProfile> findAllByIdInWithUser(@Param("ids") Collection<Long> ids);
 
     boolean existsByLicenseNumber(String licenseNumber);
 

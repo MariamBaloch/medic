@@ -55,6 +55,7 @@ public class AppointmentService {
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final AvailabilityRuleService availabilityRuleService;
     private final AppointmentMapper appointmentMapper;
+    private final AppointmentProfileImageService appointmentProfileImages;
     private final AuthenticatedUser authenticatedUser;
     private final PageMapper pageMapper;
     private final OutboxService outboxService;
@@ -82,7 +83,7 @@ public class AppointmentService {
                 .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
-        return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+        return appointmentProfileImages.apply(pageMapper.toResponse(appointments, appointmentMapper::toResponse));
     }
 
     /**
@@ -141,7 +142,7 @@ public class AppointmentService {
                 .and(withStatus(filters.getStatus()));
 
         Page<Appointment> appointments = appointmentRepository.findAll(spec, pageable);
-        return pageMapper.toResponse(appointments, appointmentMapper::toResponse);
+        return appointmentProfileImages.apply(pageMapper.toResponse(appointments, appointmentMapper::toResponse));
     }
 
     /**

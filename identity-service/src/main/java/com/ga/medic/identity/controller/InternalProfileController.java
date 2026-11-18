@@ -4,6 +4,7 @@ import com.ga.medic.common.contract.InternalDoctorProfileResponse;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
 import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalProfileImagesResponse;
 import com.ga.medic.identity.service.InternalProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,7 +15,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/internal")
@@ -24,6 +28,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalProfileController {
 
     private final InternalProfileService internalProfileService;
+
+    @GetMapping("/profile-images")
+    @Operation(summary = "Get profile photo URLs",
+            description = "Returns the current public photo path for the requested doctor and patient profile ids.")
+    public ResponseEntity<InternalProfileImagesResponse> getProfileImages(
+            @Parameter(description = "Doctor profile ids") @RequestParam(required = false) List<Long> doctorIds,
+            @Parameter(description = "Patient profile ids") @RequestParam(required = false) List<Long> patientIds) {
+        return ResponseEntity.ok(internalProfileService.getProfileImages(doctorIds, patientIds));
+    }
 
     @GetMapping("/patients/{id}")
     @Operation(summary = "Get a patient snapshot",

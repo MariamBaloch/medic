@@ -65,6 +65,8 @@ public class AppointmentServiceTest {
     @Mock
     private AppointmentMapper appointmentMapper;
     @Mock
+    private AppointmentProfileImageService appointmentProfileImages;
+    @Mock
     private AuthenticatedUser authenticatedUser;
     @Mock
     private PageMapper pageMapper;

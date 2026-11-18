@@ -4,6 +4,8 @@ import com.ga.medic.common.contract.InternalDoctorProfileResponse;
 import com.ga.medic.common.contract.InternalDoctorSnapshotResponse;
 import com.ga.medic.common.contract.InternalPatientProfileResponse;
 import com.ga.medic.common.contract.InternalPatientSnapshotResponse;
+import com.ga.medic.common.contract.InternalProfileImageResponse;
+import com.ga.medic.common.contract.InternalProfileImagesResponse;
 import com.ga.medic.identity.exception.InformationNotFoundException;
 import com.ga.medic.identity.model.DoctorProfile;
 import com.ga.medic.identity.model.PatientProfile;
@@ -13,6 +15,9 @@ import com.ga.medic.identity.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -112,6 +117,51 @@ public class InternalProfileService {
                 profile.getLicenseNumber(),
                 profile.getBio()
         );
+    }
+
+    /**
+     * Returns the current public photo path for the requested doctor and patient profiles.
+     *
+     * @param doctorIds doctor profile ids
+     * @param patientIds patient profile ids
+     * @return photo paths, omitting ids that do not exist
+     */
+    @Transactional(readOnly = true)
+    public InternalProfileImagesResponse getProfileImages(List<Long> doctorIds, List<Long> patientIds) {
+        return new InternalProfileImagesResponse(doctorImages(doctorIds), patientImages(patientIds));
+    }
+
+    private List<InternalProfileImageResponse> doctorImages(List<Long> ids) {
+        List<Long> distinct = distinctIds(ids);
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        return doctorProfileRepository.findAllByIdInWithUser(distinct).stream()
+                .map(profile -> new InternalProfileImageResponse(
+                        profile.getId(),
+                        fileStorageService.publicImageUrl(profile.getUser().getImageUrl())
+                ))
+                .toList();
+    }
+
+    private List<InternalProfileImageResponse> patientImages(List<Long> ids) {
+        List<Long> distinct = distinctIds(ids);
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        return patientProfileRepository.findAllByIdInWithUser(distinct).stream()
+                .map(profile -> new InternalProfileImageResponse(
+                        profile.getId(),
+                        fileStorageService.publicImageUrl(profile.getUser().getImageUrl())
+                ))
+                .toList();
+    }
+
+    private static List<Long> distinctIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return ids.stream().filter(Objects::nonNull).distinct().toList();
     }
 
     private PatientProfile loadPatient(Long patientProfileId) {
