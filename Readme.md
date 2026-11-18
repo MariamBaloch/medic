@@ -15,8 +15,8 @@ while doctors can manage their schedules, availability rules, and appointment hi
   transaction-safe booking, rescheduling, and double-booking prevention.
 - **Priority Appointment Waitlist:** Patients can queue for one exact booked slot. When it is released, the earliest
   eligible patient receives a 15-minute offer that reserves the slot until accepted, declined, or expired.
-- **Real-Time & Email Notifications:** Server-Sent Events (SSE) push notifications for appointment updates, with
-  matching styled email notifications dispatched after the business transaction commits.
+- **Real-Time & Email Notifications:** Booking events reach `notification-service` through Kafka. See
+  [notification-service/README.md](notification-service/README.md).
 - **Security & Reliability:** Global exception handling, gateway Redis rate limiting, and comprehensive audit logging.
 - **API Documentation:** Interactive Swagger/OpenAPI documentation.
 
@@ -45,12 +45,15 @@ accounts.
 - **Spring Data JPA** for persistence
 - **PostgreSQL** as the main relational database
 - **PostgreSQL advisory transaction locks and partial unique indexes** for slot-level concurrency protection
-- **Flyway** for versioned PostgreSQL schema migrations (V1–V4), including appointment concurrency and waitlist changes
+- **Flyway** per service, each in its own Postgres schema (`identity`, `booking`, `notification`, `audit`)
 - **Spring Data JPA Specifications and Pageable** for waitlist filtering and pagination
 - **Spring Validation** for request validation
 - **Spring Mail** for email delivery
 - **Thymeleaf** for styled HTML email templates
-- **Spring Data Redis** for Redis integration
+- **Spring Data Redis** for token blacklist, token version, the booking schedule-cache version, and gateway rate
+  limiting
+- **Apache Kafka (KRaft)** with a transactional outbox and dead-letter topics
+- **ShedLock** so the waitlist expiry job runs on one booking instance
 - **Bucket4j** with Redis support for gateway rate limiting
 - **Spring AOP** for cross-cutting concerns such as audit logging
 - **Spring Boot Actuator** for health/monitoring endpoints
@@ -59,95 +62,83 @@ accounts.
 - **Lombok** for reducing boilerplate
 - **Server-Sent Events (SSE)** for real-time notifications
 - **Java `ThreadPoolExecutor`** for bounded post-commit email dispatch
-- **JUnit** and **Spring Boot Test** for testing
-- **H2** for business-logic tests and **Testcontainers** for PostgreSQL integration tests
+- **JUnit**, **Spring Boot Test**, and **Cucumber** for testing
+- **H2** for business-logic and booking Cucumber tests, and **Testcontainers** for PostgreSQL concurrency tests
 - **Maven** for dependency management and builds
 
 ## Architecture
 
-The repository is a Maven multi-module microservices layout:
+The repository is a Maven multi-module layout. Services are the running applications. Libraries are shared code with no
+port.
 
-| Module                                                              | Port | Responsibility                                                    |
-|---------------------------------------------------------------------|------|-------------------------------------------------------------------|
-| `gateway-service`                                                   | 8080 | Public entry: routing, CORS, Redis rate limiting, correlation IDs |
-| `booking-service`                                                   | 8081 | Availability, appointments, waitlist, schedule cache              |
-| `identity-service`                                                  | 8082 | Auth, users, profiles, specializations, doctor directory          |
-| `notification-service`                                              | 8084 | In-app notifications, SSE, email                                  |
-| `audit-service`                                                     | 8085 | Append-only audit log                                             |
-| `medic-common` / `medic-security` / `medic-messaging` / `medic-web` | —    | Shared contracts and infra libraries                              |
+### Services
 
-Public clients keep using `http://localhost:8080`.
+| Module                 | Port | Responsibility                                                    | README                                   |
+|------------------------|------|-------------------------------------------------------------------|------------------------------------------|
+| `gateway-service`      | 8080 | Public entry: routing, CORS, Redis rate limiting, correlation IDs | [README](gateway-service/README.md)      |
+| `booking-service`      | 8081 | Availability, appointments, waitlist, schedule cache              | [README](booking-service/README.md)      |
+| `identity-service`     | 8082 | Auth, users, profiles, specializations, doctor directory          | [README](identity-service/README.md)     |
+| `notification-service` | 8084 | In-app notifications, SSE, email                                  | [README](notification-service/README.md) |
+| `audit-service`        | 8085 | Append-only audit log                                             | [README](audit-service/README.md)        |
 
-## Booking Engine Design
+### Libraries
 
-The appointment booking system utilizes a highly efficient **rule-based engine** rather than a naive date-generation
-model.
+| Module            | Responsibility                                               | README                              |
+|-------------------|--------------------------------------------------------------|-------------------------------------|
+| `medic-common`    | Event contracts, topic names, snapshot records               | [README](medic-common/README.md)    |
+| `medic-security`  | JWT validation, Redis token checks, internal API key         | [README](medic-security/README.md)  |
+| `medic-messaging` | Transactional outbox, processed events, dead-letter handling | [README](medic-messaging/README.md) |
+| `medic-web`       | Shared error body, page shape, correlation id                | [README](medic-web/README.md)       |
 
-### Why Rule-Based?
-
-A naive approach (generating and storing rows for every possible 15-30 minute slot for the next 5 years or even 3
-months) would result in a massive database footprint (millions of rows per doctor) and slow query performance.
-
-Instead, the **Rule-Based Engine** models availability conceptually:
-
-- **`AvailabilityRule`:** Defines a recurring schedule (e.g., "Monday and Wednesday, 9 AM to 5 PM, 30-minute slots, for
-  the next 6 months").
-- **`AvailabilityException`:** Defines temporary exceptions to the regular availability schedule, such as being sick for
-  a day or taking vacation.
-- **`Appointment`:** Represents actual booked slots.
-
-When a patient queries a doctor's availability for a given date range, the engine **dynamically calculates** available
-slots in real-time by:
-
-1. Fetching all active `AvailabilityRule` for the doctor.
-2. Generating a virtual schedule of time slots in memory.
-3. Fetching and applying `AvailabilityException`s to cross out unavailable times.
-4. Fetching existing `Appointment`s and active waitlist offers to label each valid scheduled slot as `AVAILABLE`,
-   `BOOKED`, or `WAITLIST_OFFERED`.
-5. Returning valid slots, including booked slots, so a patient calendar can offer waitlist entry where appropriate.
-
-This approach guarantees high performance, negligible storage requirements, and immediate reflection of any schedule
-changes.
-
-### Booking Concurrency and Priority Waitlist
-
-- **Booking:** Patient-row locks prevent overlapping bookings; PostgreSQL slot-level advisory locks serialize requests
-  for the same slot, and a partial unique index prevents duplicate active appointments.
-- **Rescheduling:** `Appointment.version` rejects stale updates; patient and consistently ordered slot locks protect the
-  change, and a failed reschedule preserves the original appointment.
-- **Waitlist:** Partial unique indexes prevent duplicate active entries and multiple offers for one slot. Released slots
-  are offered in queue order for 15 minutes; active offers block ordinary bookings, while decline or expiry advances the
-  queue.
-
-See the [Concurrency Guide](docs/CONCURRENCY.md) for implementation details.
-
-### Appointment Notification Delivery
-
-Appointment notifications are saved in the same transaction as the booking, rescheduling, or cancellation. After the
-transaction commits, Medic sends real-time updates through SSE and schedules emails using a thread pool (2 core threads,
-up to 4, with a queue for 100 tasks).
+Public clients keep using `http://localhost:8080`. One Postgres database, `medic`, is shared. Isolation is a role and a
+schema per service, not a database per service. How availability is calculated, how a slot is locked, and how a booking
+becomes a notification are in the [booking](booking-service/README.md)
+and [notification](notification-service/README.md) READMEs. Production Compose is [
+`deploy/docker-compose.prod.yml`](deploy/docker-compose.prod.yml).
 
 ## Project Planning and User Stories
 
-The implementation plan is in [`docs/Project_3_Planning.md`](docs/Project_3_Planning.md). User stories and project
-tracking are maintained on the [Medic Trello board](https://trello.com/b/9VwIYDT1/medic).
+Project 3 is in [`docs/Project_3_Planning.md`](docs/Project_3_Planning.md). The two-week service split is in
+[`docs/Project_4_Planning.md`](docs/Project_4_Planning.md). User stories and project tracking are maintained on the
+[Medic Trello board](https://trello.com/b/9VwIYDT1/medic).
 
-## Entity Relationship Diagram (ERD)
+## Database schemas
 
-The database schema was designed to cleanly separate user authentication data from profile-specific data and booking
-logic.
+One Postgres database, `medic`, with a schema per service. There is no foreign key from a booking row to an identity
+table. `doctor_id` and `patient_id` are copied profile ids.
 
-![ERD.png](docs/ERD.png)
+### Identity Schema
+
+![Identity schema](docs/identity_schema.png)
+
+### Booking Schema
+
+![Booking schema](docs/booking_schema.png)
+
+### Notification Schema
+
+![Notification schema](docs/notification_schema.png)
+
+### Audit Schema
+
+![Audit schema](docs/audit_schema.png)
 
 ## API Documentation
 
-Interactive Swagger documentation is available at `http://localhost:8080/swagger-ui.html` when the application is
-running.
+Interactive Swagger documentation is served by each API service, through the gateway:
+
+- Identity: `http://localhost:8080/api/identity/swagger-ui.html`
+- Booking: `http://localhost:8080/api/booking/swagger-ui.html`
+- Notification: `http://localhost:8080/api/notification/swagger-ui.html`
+- Audit: `http://localhost:8080/api/audit/swagger-ui.html`
+
+The `prod` profile disables these pages. The gateway has no Swagger UI.
 
 ## Testing
 
-H2 tests cover business workflows; PostgreSQL/Testcontainers tests cover constraints and concurrency (Docker required).
-The gateway has route, CORS, proxy, and rate-limit rule tests. Run the suite with `./mvnw test`; see the
+H2 tests cover business workflows. PostgreSQL/Testcontainers tests cover constraints and concurrency (Docker required).
+Booking Cucumber covers booking, cancellation, anonymous access, health, and a ten-patient race for one slot. The
+gateway has route, CORS, proxy, and rate-limit rule tests. Run the suite with `./mvnw test`; see the
 [Concurrency Guide](docs/CONCURRENCY.md) for details.
 
 ## Installation
@@ -182,8 +173,9 @@ Follow these steps to run the application locally:
    ./mvnw -pl gateway-service spring-boot:run
    ```
 
-5. **Seed the Database:**
-   Identity Flyway/seed initializes roles and specializations. Booking Flyway owns the `booking` schema.
+5. **Database layout:**
+   Compose init creates the `medic` database, the service roles, and the four schemas. Each service's Flyway then
+   creates its own tables. Identity seed loads the demo users and specializations.
 
 6. **Access the Application:**
     - API Base URL: `http://localhost:8080` (gateway)
@@ -199,16 +191,14 @@ Follow these steps to run the application locally:
   exact-slot advisory locks, optimistic versions, and PostgreSQL constraints.
 - **Waitlist Priority:** Releasing a slot and offering it to the next eligible patient had to remain atomic with booking
   operations so an ordinary request could not take a slot during an active offer.
+- **Service split:** Booking could no longer read identity tables. Snapshots, a claims JWT, and a keyed internal API
+  replaced the old in-process calls.
 
 ## Future Improvements
 
-- **Broader API Testing:** Extend the existing H2 and PostgreSQL/Testcontainers suites to cover additional availability,
-  booking, and waitlist edge cases.
-- **Redis Caching for Availability:** Optimize performance by caching the results of `computeAvailableSlots` in Redis.
-  This cache will be strategically invalidated and refreshed only when a doctor updates their availability rules or
-  exceptions.
-- **Durable Email Delivery:** Add a transactional outbox and retry mechanism so committed notifications can be emailed
-  after a process restart or temporary mail-service failure.
+- **Broader API Testing:** Extend Cucumber and the PostgreSQL suites to more waitlist and notification cases.
+- **More than one booking instance:** Run two booking replicas against one database and show ShedLock and the slot lock
+  under parallel requests.
 
 ## Credits & Resources
 
